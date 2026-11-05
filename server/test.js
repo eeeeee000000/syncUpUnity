@@ -490,6 +490,26 @@ async function main() {
     ok('online visas den publika adressen, och nyckeln krävs fortfarande');
     ok('för många anslutningar från samma IP stängs (kod 1008)');
 
+    console.log('Start');
+    const second = spawn('node', ['server.js'], {
+      cwd: __dirname,
+      env: { ...process.env, PORT: String(PORT), DATA_DIR: dataDir },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let secondOut = '';
+    second.stdout.on('data', (d) => (secondOut += d));
+    const secondCode = await new Promise((resolve) => second.on('exit', resolve));
+    assert.strictEqual(secondCode, 1);
+    assert(/används redan/.test(secondOut));
+    ok('om servern redan körs avslutas den nya med ett tydligt meddelande');
+
+    const logFile = path.join(dataDir, 'server.log');
+    const logged = await startServer({ PORT: String(PORT + 4), DATA_DIR: dataDir, LOG_FILE: logFile });
+    logged.kill();
+    await new Promise((resolve) => logged.on('exit', resolve));
+    assert(/lyssnar på port/.test(fs.readFileSync(logFile, 'utf8')));
+    ok('loggen skrivs till LOG_FILE (för Unity)');
+
     console.log('Säkerhet');
     const homePage = await fetch(`http://127.0.0.1:${PORT}/`);
     assert(homePage.headers.get('content-security-policy').includes("frame-ancestors 'none'"));

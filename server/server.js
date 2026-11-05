@@ -1,7 +1,7 @@
 'use strict';
 
 // syncUp-servern. Kör med "Starta syncUp.bat" eller npm start.
-// Inställningar: PORT, DATA_DIR, ADMIN_KEY, HOSTED, PUBLIC_URL, INTEREST_WAIT_MS, BOT_SPEED
+// Inställningar: PORT, DATA_DIR, ADMIN_KEY, HOSTED, PUBLIC_URL, INTEREST_WAIT_MS, BOT_SPEED, LOG_FILE
 
 const http = require('http');
 const fs = require('fs');
@@ -15,6 +15,20 @@ const { Reports } = require('./reports');
 const { createHub } = require('./hub');
 const { createAdmin } = require('./admin');
 const { ConnectionCounter, clientIp, securityHeaders } = require('./security');
+
+// Unity startar servern utan fönster och läser loggen från den här filen i stället
+// Skrivs direkt (sync), annars hinner raderna inte sparas när Unity stänger servern
+if (process.env.LOG_FILE) {
+  const logFile = process.env.LOG_FILE;
+  fs.writeFileSync(logFile, '');
+  for (const level of ['log', 'error']) {
+    const original = console[level];
+    console[level] = (...args) => {
+      fs.appendFileSync(logFile, args.join(' ') + '\n');
+      original(...args);
+    };
+  }
+}
 
 const PORT = Number(process.env.PORT) || 8080;
 const DATA_DIR = process.env.DATA_DIR || __dirname;
@@ -156,12 +170,22 @@ server.listen(PORT, () => {
   }
 });
 
-function openInBrowser(url) {
+// Om servern redan körs (t.ex. i ett annat fönster) öppnas bara chatten
+server.on('error', (err) => {
+  if (err.code !== 'EADDRINUSE') throw err;
+  console.log(`Port ${PORT} används redan. Servern körs nog redan i ett annat fönster,`);
+  console.log('adminlänken står i det fönstret.');
+  if (process.env.OPEN_BROWSER === '1') openInBrowser(`http://localhost:${PORT}`, () => process.exit(1));
+  else process.exit(1);
+});
+
+function openInBrowser(url, done) {
   const { exec } = require('child_process');
   const command =
     process.platform === 'win32' ? `start "" "${url}"` : process.platform === 'darwin' ? `open "${url}"` : `xdg-open "${url}"`;
   exec(command, (err) => {
     if (err) console.log('Kunde inte öppna webbläsaren: ' + err.message);
+    if (done) done();
   });
 }
 

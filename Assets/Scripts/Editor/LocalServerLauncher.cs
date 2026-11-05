@@ -14,13 +14,60 @@ static class LocalServerLauncher
     const int Port = 8080;
     const string MenuPath = "syncUp/Starta servern vid Play";
     const string EnabledPref = "syncUp.autoStartServer";
-    // Skripten laddas om när Play startar, så process-id:t måste sparas här
+    // Skripten laddas om när Play startar, så process-id och läsposition måste sparas här
     const string PidKey = "syncUp.serverPid";
+    const string LogOffsetKey = "syncUp.serverLogOffset";
+    const double LogPollSeconds = 0.5;
+
+    static double nextLogPoll;
 
     static LocalServerLauncher()
     {
         EditorApplication.playModeStateChanged += OnPlayModeChanged;
         EditorApplication.quitting += StopServer;
+        EditorApplication.update += PollLog;
+    }
+
+    static string LogPath =>
+        Path.Combine(Directory.GetParent(UnityEngine.Application.dataPath).FullName, "Temp", "syncUp-server.log");
+
+    // Visar nya rader från serverns logg i Console
+    static void PollLog()
+    {
+        if (SessionState.GetInt(PidKey, 0) == 0) return;
+        if (EditorApplication.timeSinceStartup < nextLogPoll) return;
+        nextLogPoll = EditorApplication.timeSinceStartup + LogPollSeconds;
+        ReadNewLogLines();
+    }
+
+    static void ReadNewLogLines()
+    {
+        if (!File.Exists(LogPath)) return;
+        try
+        {
+            // FileShare.ReadWrite eftersom servern skriver i filen samtidigt
+            using (var stream = new FileStream(LogPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            {
+                long offset = SessionState.GetInt(LogOffsetKey, 0);
+                if (stream.Length <= offset) return;
+                stream.Seek(offset, SeekOrigin.Begin);
+                var bytes = new byte[stream.Length - offset];
+                int read = stream.Read(bytes, 0, bytes.Length);
+                // bara hela rader, resten tas nästa gång
+                int end = Array.LastIndexOf(bytes, (byte)'\n', read - 1);
+                if (end < 0) return;
+                string text = System.Text.Encoding.UTF8.GetString(bytes, 0, end + 1);
+                SessionState.SetInt(LogOffsetKey, (int)(offset + end + 1));
+                foreach (string line in text.Split('\n'))
+                {
+                    if (line.Trim().Length > 0) Debug.Log("[server] " + line.TrimEnd('\r'));
+                }
+            }
+        }
+        catch (IOException)
+        {
+            // filen är upptagen just nu, försöker igen om en halv sekund
+        }
     }
 
     static bool Enabled
@@ -73,6 +120,8 @@ static class LocalServerLauncher
         };
         info.EnvironmentVariables["ADMIN_KEY"] = adminKey;
         info.EnvironmentVariables["PORT"] = Port.ToString();
+        info.EnvironmentVariables["LOG_FILE"] = LogPath;
+        SessionState.SetInt(LogOffsetKey, 0);
 
         try
         {
@@ -91,6 +140,7 @@ static class LocalServerLauncher
     {
         int pid = SessionState.GetInt(PidKey, 0);
         if (pid == 0) return;
+        ReadNewLogLines(); // det sista innan servern stängs
         SessionState.EraseInt(PidKey);
         try
         {
