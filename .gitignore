@@ -70,3 +70,10 @@ crashlytics-build.properties
 # Temporary auto-generated Android Assets
 /[Aa]ssets/[Ss]treamingAssets/aa.meta
 /[Aa]ssets/[Ss]treamingAssets/aa/*
+
+# syncUp-servern: konton och rapporter skapas när servern körs och ska inte upp på GitHub
+/server/users.json
+/server/users.json.tmp
+/server/reports.log
+/server/node_modules/
+

@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#18191c">
+<title>syncUp</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Startskärm -->
+<section class="screen" id="home">
+  <div class="card">
+    <h1>syncUp</h1>
+    <p class="sub">Chatta med någon ny.</p>
+
+    <p class="label">Intressen</p>
+    <div class="chips" id="interests"></div>
+
+    <button class="primary big" id="anonBtn">Chatta anonymt</button>
+    <button class="big" id="openAuthBtn">Logga in</button>
+
+    <p class="status" id="homeStatus"></p>
+  </div>
+</section>
+
+<!-- Konto -->
+<section class="screen hidden" id="auth">
+  <form class="card" id="authForm">
+    <h1>Logga in</h1>
+    <p class="sub">Konton matchas bara med andra konton.</p>
+    <input id="userInput" maxlength="16" placeholder="Användarnamn" autocomplete="username">
+    <input id="passInput" maxlength="64" type="password" placeholder="Lösenord" autocomplete="current-password">
+    <button class="primary big" type="submit" data-auth="login">Logga in</button>
+    <button class="big green" type="submit" data-auth="register">Skapa konto</button>
+    <button class="link" type="button" id="authBackBtn">Tillbaka</button>
+    <p class="status" id="authStatus"></p>
+  </form>
+</section>
+
+<!-- Chatt -->
+<section class="screen hidden" id="chat">
+  <header class="top">
+    <div class="avatar" id="avatar">?</div>
+    <div class="who">
+      <div class="name" id="chatName">Söker...</div>
+      <div class="meta" id="chatMeta"></div>
+    </div>
+    <div class="actions">
+      <button class="purple" id="botBtn" title="Chatta med testboten">Bot</button>
+      <button class="amber" id="iceBtn" title="Slumpa en fråga att prata om">Fråga</button>
+      <button class="primary" id="nextBtn">Nästa</button>
+      <button class="red" id="reportBtn">Rapportera</button>
+      <button id="leaveBtn">Lämna</button>
+    </div>
+  </header>
+
+  <div class="messages" id="messages"></div>
+  <div class="typing" id="typing"></div>
+
+  <form class="composer" id="sendForm">
+    <input id="chatInput" maxlength="300" placeholder="Skriv ett meddelande..." autocomplete="off" disabled>
+    <button class="primary send" type="submit" id="sendBtn" disabled aria-label="Skicka">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M3 20.5 21 12 3 3.5v6.6l12 1.9-12 1.9z" fill="currentColor"/></svg>
+    </button>
+  </form>
+</section>
+
+<!-- Rapportera -->
+<div class="modal hidden" id="reportModal">
+  <div class="dialog">
+    <h3>Rapportera <span id="reportName"></span></h3>
+    <p class="sub">Välj orsak:</p>
+    <div class="reasons" id="reasons"></div>
+    <button class="link" id="reportCancel">Avbryt</button>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

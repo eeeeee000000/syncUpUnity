@@ -1,0 +1,15 @@
+# Ordfilter för syncUp. Ett ord per rad. Rader som börjar med # ignoreras.
+# Orden döljs med *** i chatten. Lägg gärna till fler själv.
+fuck
+fucking
+shit
+bitch
+cunt
+asshole
+hora
+fitta
+kuk
+knulla
+jävla
+helvete
+idiot

@@ -1,0 +1,224 @@
+/* syncUp – webbversionen. Samma färger som Unity-appen. */
+
+:root {
+  --bg: #18191c;
+  --panel: #222327;
+  --bubble: #303136;
+  --button: #3a3b40;
+  --field: rgba(255, 255, 255, 0.07);
+  --text: #f2f2f3;
+  --muted: #8e8f94;
+  --primary: #3d78d9;
+  --warn: #ffb38a;
+
+  /* Knappfärger med betydelse, dämpade så att de inte skriker */
+  --red: #c9483e;
+  --green: #3f9e6a;
+  --amber: #c98a2b;
+  --purple: #7a5bc9;
+
+  /* Den varma startskärmen */
+  --coral: #e0704a;
+  --warm-top: #2d1b2e;
+  --warm-bottom: #7a3f26;
+  --warm-card: rgba(26, 15, 15, 0.55);
+  --glass: rgba(255, 255, 255, 0.12);
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.4 "Segoe UI", system-ui, Arial, sans-serif;
+}
+
+.hidden { display: none !important; }
+
+button {
+  font: inherit;
+  color: var(--text);
+  background: var(--button);
+  border: 0;
+  border-radius: 10px;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+button:hover:not(:disabled) { filter: brightness(1.15); }
+button:disabled { opacity: 0.4; cursor: default; }
+button.primary { background: var(--primary); }
+button.red { background: var(--red); }
+button.green { background: var(--green); }
+button.amber { background: var(--amber); }
+button.purple { background: var(--purple); }
+button.big { padding: 13px; font-size: 17px; }
+button.link { background: none; color: var(--muted); }
+
+input {
+  font: inherit;
+  color: var(--text);
+  background: var(--field);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 12px 14px;
+  outline: none;
+  min-width: 0;
+}
+input:focus { border-color: var(--primary); }
+input::placeholder { color: var(--muted); }
+
+/* ---------------------------------------------------------------- Start / konto */
+
+.screen { min-height: 100%; }
+#home, #auth {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background: linear-gradient(var(--warm-top), var(--warm-bottom));
+}
+.card {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--panel);
+  border-radius: 18px;
+  padding: 32px 28px 24px;
+}
+#home .card, #auth .card { background: var(--warm-card); backdrop-filter: blur(8px); }
+#home button:not(.primary), #auth button:not(.primary):not(.link):not(.green) { background: var(--glass); }
+#home button.primary, #auth button.primary { background: var(--coral); }
+#home .sub, #auth .sub, #home .label { color: rgba(255, 255, 255, 0.65); }
+#home input, #auth input { background: var(--glass); }
+#home input:focus, #auth input:focus { border-color: var(--coral); }
+h1 { margin: 0; text-align: center; font-size: 36px; }
+.sub { margin: 0 0 10px; text-align: center; color: var(--muted); }
+.label { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+.status { margin: 0; min-height: 1.4em; text-align: center; color: var(--warn); }
+.footer { margin: 0; text-align: center; color: var(--muted); font-size: 13px; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.chips label { cursor: pointer; }
+.chips input { position: absolute; opacity: 0; pointer-events: none; }
+.chips span {
+  display: inline-block;
+  padding: 6px 13px;
+  border-radius: 999px;
+  background: var(--glass);
+  font-size: 14px;
+  transition: background 0.15s;
+}
+.chips input:checked + span { background: var(--coral); }
+.chips input:focus-visible + span { outline: 2px solid var(--coral); outline-offset: 2px; }
+
+/* ---------------------------------------------------------------- Chatt */
+
+#chat { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+
+.top { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: var(--panel); }
+.avatar {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 18px;
+  background: var(--button);
+}
+.who { flex: 1; min-width: 0; }
+.who .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.who .meta { color: var(--muted); font-size: 13px; }
+.actions { display: flex; gap: 6px; }
+.actions button { padding: 7px 12px; font-size: 14px; }
+
+.messages { flex: 1; overflow-y: auto; padding: 16px 18px 6px; display: flex; flex-direction: column; gap: 3px; }
+
+.row { display: flex; align-items: flex-end; gap: 8px; }
+.row.me { flex-direction: row-reverse; }
+.row + .row.first { margin-top: 10px; }
+.bubble {
+  max-width: min(70%, 560px);
+  padding: 8px 13px;
+  border-radius: 18px;
+  background: var(--bubble);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.row.me .bubble { background: var(--primary); }
+.row .time { color: var(--muted); font-size: 12px; padding-bottom: 6px; }
+.row[data-id] .bubble { cursor: pointer; position: relative; }
+.row.reacted { margin-bottom: 12px; }
+
+/* Reaktionsmärket som hänger i bubblans nedre hörn */
+.reacts {
+  position: absolute;
+  bottom: -13px;
+  right: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 2px solid var(--bg);
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--text);
+}
+.row.me .reacts { right: auto; left: 8px; }
+
+/* Raden man väljer reaktion i */
+.picker { display: flex; gap: 4px; margin: 2px 0 6px; }
+.picker.me { justify-content: flex-end; }
+.picker button { width: 36px; height: 36px; padding: 0; border-radius: 50%; background: var(--panel); font-size: 17px; }
+.picker button:hover { background: var(--button); }
+
+.system { align-self: center; color: var(--muted); font-size: 13px; margin: 10px 0; text-align: center; }
+.notice {
+  align-self: center;
+  max-width: min(80%, 560px);
+  margin: 10px 0;
+  padding: 9px 14px;
+  border-radius: 12px;
+  background: var(--panel);
+  text-align: center;
+  font-size: 15px;
+}
+.notice b { display: block; color: var(--muted); font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+
+.typing { height: 22px; padding: 0 20px; color: var(--muted); font-size: 13px; }
+
+.composer { display: flex; gap: 8px; padding: 10px 14px; padding-bottom: max(10px, env(safe-area-inset-bottom)); background: var(--panel); }
+.composer input { flex: 1; border-radius: 999px; padding: 11px 18px; }
+.composer .send { width: 44px; height: 44px; padding: 0; border-radius: 50%; display: grid; place-items: center; }
+
+/* ---------------------------------------------------------------- Rapportruta */
+
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.dialog { width: 100%; max-width: 360px; background: var(--panel); border-radius: 18px; padding: 22px; display: flex; flex-direction: column; gap: 8px; }
+.dialog h3 { margin: 0; text-align: center; }
+.reasons { display: flex; flex-direction: column; gap: 6px; }
+.reasons button { padding: 11px; background: var(--red); }
+
+/* ---------------------------------------------------------------- Mobil */
+
+@media (max-width: 640px) {
+  .top { flex-wrap: wrap; }
+  .who { flex-basis: calc(100% - 60px); }
+  .actions { width: 100%; }
+  .actions button { flex: 1; padding: 8px 4px; font-size: 13px; }
+  .messages { padding: 12px 10px 6px; }
+  .bubble { max-width: 80%; }
+  .card { padding: 26px 20px 20px; }
+}

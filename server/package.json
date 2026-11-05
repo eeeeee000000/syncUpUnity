@@ -1,0 +1,14 @@
+{
+  "name": "syncup-server",
+  "version": "1.0.0",
+  "description": "Matchnings- och chattserver för skolprojektet syncUp",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}

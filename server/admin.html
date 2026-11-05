@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>syncUp – Adminpanel</title>
+<style>
+  /* Samma färger som appen */
+  :root {
+    --bg: #18191c; --panel: #222327; --panel2: #303136; --button: #3a3b40;
+    --text: #f2f2f3; --muted: #8e8f94;
+    --blue: #3d78d9; --green: #3f9e6a; --red: #c9483e; --amber: #c98a2b; --coral: #e0704a;
+    --warm-top: #2d1b2e; --warm-bottom: #7a3f26;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 "Segoe UI", system-ui, Arial, sans-serif; }
+
+  header {
+    display: flex; align-items: center; gap: 12px; padding: 18px 24px;
+    background: linear-gradient(100deg, var(--warm-top), var(--warm-bottom));
+  }
+  header h1 { margin: 0; font-size: 22px; }
+  header h1 small { font-weight: normal; opacity: 0.7; margin-left: 6px; font-size: 16px; }
+  header .live { margin-left: auto; font-size: 13px; opacity: 0.85; }
+  header .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #6fdc9c; margin-right: 6px; }
+  header .dot.off { background: var(--red); }
+
+  main { max-width: 1200px; margin: 0 auto; padding: 20px 16px 60px; display: grid; gap: 16px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+  .card { background: var(--panel); border-radius: 14px; padding: 14px 16px; }
+  .card .num { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .card .label { color: var(--muted); font-size: 13px; }
+
+  section { background: var(--panel); border-radius: 14px; padding: 16px 18px; overflow-x: auto; }
+  section h2 { margin: 0 0 12px; font-size: 16px; }
+  section h2 small { color: var(--muted); font-weight: normal; font-size: 13px; margin-left: 6px; }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 16px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--panel2); white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; }
+  .empty { color: var(--muted); margin: 0; }
+
+  .pill { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; background: var(--button); }
+  .pill.chattar { background: #1f4d36; } .pill.söker { background: #4d3d1c; } .pill.avstängd { background: #5a2525; }
+  .pill.bot { background: #3b2f66; }
+
+  button { font: inherit; color: #fff; border: 0; border-radius: 10px; padding: 6px 13px; cursor: pointer; background: var(--button); }
+  button:hover { filter: brightness(1.15); }
+  button.red { background: var(--red); } button.green { background: var(--green); } button.blue { background: var(--blue); }
+  button.coral { background: var(--coral); }
+  .row { display: flex; gap: 8px; }
+  input { flex: 1; font: inherit; color: var(--text); background: var(--panel2); border: 1px solid transparent; border-radius: 10px; padding: 8px 12px; outline: none; }
+  input:focus { border-color: var(--blue); }
+  pre { margin: 0 0 10px; padding: 12px 14px; background: var(--bg); border-radius: 10px; white-space: pre-wrap; font-size: 13px; }
+  .note { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+
+  /* Bjud in: QR-kod + adress */
+  .invite { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+  .qr { width: 160px; height: 160px; background: #fff; border-radius: 12px; padding: 8px; flex: none; }
+  .qr svg { width: 100%; height: 100%; display: block; }
+  .invite .url { font-size: 22px; font-weight: 700; word-break: break-all; }
+  .invite .other { color: var(--muted); font-size: 13px; margin-top: 4px; }
+
+  /* Stor QR-kod för projektorn */
+  #big { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px;
+    background: linear-gradient(var(--warm-top), var(--warm-bottom)); cursor: pointer; z-index: 10; }
+  #big h2 { margin: 0; font-size: 44px; }
+  #big .qr { width: min(60vh, 80vw); height: min(60vh, 80vw); padding: 18px; border-radius: 24px; }
+  #big .url { font-size: clamp(22px, 4vw, 40px); font-weight: 700; }
+  #big .hint { opacity: 0.6; font-size: 14px; }
+  .hidden { display: none !important; }
+
+  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--panel2); padding: 10px 18px; border-radius: 10px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+  @media (max-width: 600px) { .grid2 { grid-template-columns: 1fr; } header { padding: 14px 16px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>syncUp <small>admin</small></h1>
+  <div class="live"><span class="dot" id="dot"></span><span id="liveText">Ansluter...</span></div>
+</header>
+
+<main>
+  <div class="cards" id="cards"></div>
+
+  <section>
+    <h2>Bjud in</h2>
+    <div class="invite">
+      <div class="qr" id="qr"></div>
+      <div>
+        <div class="url" id="joinUrl">–</div>
+        <div class="other" id="otherUrls"></div>
+        <p class="note">Skanna med mobilen eller skriv in adressen i webbläsaren. Alla måste vara på samma nätverk om servern körs lokalt.</p>
+        <button class="coral" id="showBig">Visa stort</button>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Meddelande till alla</h2>
+    <form class="row" id="announceForm">
+      <input id="announceText" maxlength="200" placeholder="T.ex. Välkomna till presentationen!" autocomplete="off">
+      <button class="blue" type="submit">Skicka</button>
+    </form>
+  </section>
+
+  <div class="grid2">
+    <section>
+      <h2>Anslutna <small id="connectedCount"></small></h2>
+      <div id="connected"></div>
+    </section>
+    <section>
+      <h2>Pågående chattar <small id="roomCount"></small></h2>
+      <div id="rooms"></div>
+      <p class="note">Vad folk skriver visas aldrig här, bara i rapporter.</p>
+    </section>
+  </div>
+
+  <section>
+    <h2>Konton <small id="accountCount"></small></h2>
+    <div id="accounts"></div>
+  </section>
+
+  <section>
+    <h2>Rapporter <small id="reportCount"></small></h2>
+    <div class="row" style="margin-bottom:12px"><button class="red" id="clearReports">Rensa alla rapporter</button></div>
+    <div id="reports"></div>
+  </section>
+</main>
+
+<div id="big" class="hidden" title="Klicka för att stänga">
+  <h2>Chatta på syncUp</h2>
+  <div class="qr" id="bigQr"></div>
+  <div class="url" id="bigUrl"></div>
+  <div class="hint">Klicka var som helst för att stänga</div>
+</div>
+
+<div id="toast"></div>
+
+<script src="/vendor/qrcode.js"></script>
+<script>
+'use strict';
+
+const KEY = new URLSearchParams(location.search).get('key') || '';
+const MODE = { anon: 'Anonym', account: 'Konto' };
+const INTEREST = { spel: 'Spel', musik: 'Musik', sport: 'Sport', film: 'Film & serier', bocker: 'Böcker',
+  mat: 'Mat', djur: 'Djur', resor: 'Resor', teknik: 'Teknik', konst: 'Konst' };
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function duration(sec) {
+  if (sec < 60) return sec + ' s';
+  if (sec < 3600) return Math.floor(sec / 60) + ' min';
+  return Math.floor(sec / 3600) + ' h ' + Math.floor((sec % 3600) / 60) + ' min';
+}
+
+function table(headers, rows) {
+  if (!rows.length) return '<p class="empty">Inget här just nu.</p>';
+  return '<table><tr>' + headers.map((h) => '<th>' + h + '</th>').join('') + '</tr>' +
+    rows.map((r) => '<tr>' + r.map((c) => '<td>' + c + '</td>').join('') + '</tr>').join('') + '</table>';
+}
+
+function toast(text) {
+  const el = $('toast');
+  el.textContent = text;
+  el.classList.add('show');
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+async function api(path, body) {
+  const res = await fetch('/admin/api/' + path, {
+    method: body ? 'POST' : 'GET',
+    headers: { 'X-Admin-Key': KEY, 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Något gick fel.');
+  return data;
+}
+
+async function act(path, body, okText) {
+  try {
+    await api(path, body);
+    toast(okText);
+    refresh();
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
+// ---------------------------------------------------------------- QR-kod
+
+let shownUrl = null;
+
+function qrSvg(url) {
+  const qr = qrcode(0, 'M'); // 0 = välj storlek själv, M = tål att en del av koden är skymd
+  qr.addData(url);
+  qr.make();
+  return qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
+}
+
+function renderInvite(urls) {
+  // Från den här datorn fungerar localhost; adressen i nätverket är den andra ska använda
+  const url = urls[0] || location.origin;
+  if (url === shownUrl) return;
+  shownUrl = url;
+  $('qr').innerHTML = $('bigQr').innerHTML = qrSvg(url);
+  $('joinUrl').textContent = $('bigUrl').textContent = url.replace(/^https?:\/\//, '');
+  $('otherUrls').textContent = urls.length > 1 ? 'Andra adresser: ' + urls.slice(1).join(', ') : '';
+}
+
+$('showBig').addEventListener('click', () => $('big').classList.remove('hidden'));
+$('big').addEventListener('click', () => $('big').classList.add('hidden'));
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('big').classList.add('hidden'); });
+
+// ---------------------------------------------------------------- Översikt
+
+function render(s) {
+  renderInvite(s.joinUrls || []);
+
+  const cards = [
+    [s.online, 'Online'], [s.anon, 'Anonyma'], [s.account, 'Med konto'], [s.rooms.length, 'Pågående chattar'],
+    [s.queued, 'Söker'], [s.stats.matches, 'Matchningar'], [s.stats.messages, 'Meddelanden'],
+    [s.reports.length, 'Rapporter'], [duration(s.uptimeSec), 'Servern har körts'],
+  ];
+  $('cards').innerHTML = cards.map(([n, l]) =>
+    '<div class="card"><div class="num">' + esc(n) + '</div><div class="label">' + l + '</div></div>').join('');
+
+  $('connectedCount').textContent = s.connected.length;
+  $('connected').innerHTML = table(['Namn', 'Läge', 'Status', 'Intressen', 'Online', ''],
+    s.connected.map((c) => [
+      '<b>' + esc(c.name) + '</b>',
+      MODE[c.mode],
+      '<span class="pill ' + c.status + '">' + c.status + (c.partner ? ' med ' + esc(c.partner) : '') + '</span>',
+      c.interests.map((i) => INTEREST[i] || i).join(', ') || '–',
+      duration(c.seconds),
+      '<button class="red" data-kick="' + esc(c.name) + '">Kicka</button>',
+    ]));
+
+  $('roomCount').textContent = s.rooms.length;
+  $('rooms').innerHTML = table(['Deltagare', 'Läge', 'Längd', 'Meddelanden'],
+    s.rooms.map((r) => [
+      esc(r.names[0]) + ' ↔ ' + esc(r.names[1]) + (r.withBot ? ' <span class="pill bot">testbot</span>' : ''),
+      MODE[r.mode], duration(r.seconds), r.messages,
+    ]));
+
+  $('accountCount').textContent = s.accounts.length;
+  $('accounts').innerHTML = table(['Namn', 'Skapat', 'Status', ''],
+    s.accounts.map((a) => [
+      '<b>' + esc(a.name) + '</b>',
+      esc(new Date(a.created).toLocaleString('sv-SE')),
+      a.banned ? '<span class="pill avstängd">avstängd</span>' : (a.online ? '<span class="pill chattar">online</span>' : 'offline'),
+      a.banned
+        ? '<button class="green" data-unban="' + esc(a.name) + '">Återställ</button>'
+        : '<button class="red" data-ban="' + esc(a.name) + '">Stäng av</button>',
+    ]));
+
+  $('reportCount').textContent = s.reports.length;
+  $('reports').innerHTML = s.reports.length
+    ? s.reports.map((r) => '<pre>' + esc(r) + '</pre>').join('')
+    : '<p class="empty">Inga rapporter.</p>';
+}
+
+async function refresh() {
+  try {
+    render(await api('state'));
+    $('dot').classList.remove('off');
+    $('liveText').textContent = 'Live, uppdaterad ' + new Date().toLocaleTimeString('sv-SE');
+  } catch (err) {
+    $('dot').classList.add('off');
+    $('liveText').textContent = err.message === 'Failed to fetch' ? 'Servern svarar inte' : err.message;
+  }
+}
+
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  if (b.dataset.kick) act('kick', { name: b.dataset.kick }, b.dataset.kick + ' kopplades bort.');
+  if (b.dataset.ban && confirm('Stänga av kontot ' + b.dataset.ban + '?')) {
+    act('ban', { name: b.dataset.ban }, b.dataset.ban + ' är avstängd.');
+  }
+  if (b.dataset.unban) act('unban', { name: b.dataset.unban }, b.dataset.unban + ' är återställd.');
+});
+
+$('clearReports').addEventListener('click', () => {
+  if (confirm('Radera alla rapporter? Det går inte att ångra.')) act('clear-reports', {}, 'Rapporterna är rensade.');
+});
+
+$('announceForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const text = $('announceText').value.trim();
+  if (!text) return;
+  act('announce', { text }, 'Meddelandet skickades.').then(() => { $('announceText').value = ''; });
+});
+
+refresh();
+setInterval(refresh, 2000);
+</script>
+</body>
+</html>

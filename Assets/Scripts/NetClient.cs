@@ -10,20 +10,26 @@ using UnityEngine;
 /// <summary>
 /// Ett meddelande som skickas till eller tas emot från servern (som JSON).
 /// Alla meddelandetyper delar samma fält, de som inte används lämnas tomma.
+/// Hela protokollet beskrivs i server/hub.js.
 /// </summary>
 [Serializable]
 public class Msg
 {
-    public string type;     // anon, register, login, find, next, chat, report, welcome, auth_ok, ...
-    public string name;     // användarnamn (register/login) eller ditt namn (welcome/auth_ok)
+    public string type;         // anon, register, login, find, next, bot, chat, typing, icebreaker, react, report, ...
+    public string name;         // användarnamn (register/login) eller ditt namn (welcome/auth_ok)
     public string password;
-    public string text;     // chattext eller infotext
-    public string sender;   // vem som skrev ett chat-meddelande
-    public string partner;  // vem du blev matchad med
-    public string reason;   // orsak vid rapport
-    public string error;    // felmeddelande vid inloggning
-    public string mode;     // anon eller account
-    public int online;      // antal anslutna just nu
+    public string text;         // chattext, infotext, isbrytarfråga eller meddelande från admin
+    public string sender;       // vem som skrev ett chattmeddelande eller bad om en isbrytare
+    public string partner;      // vem du blev matchad med
+    public string reason;       // orsak vid rapport
+    public string error;        // felmeddelande vid inloggning
+    public string mode;         // anon eller account
+    public int online;          // antal anslutna just nu
+    public string[] interests;  // dina intressen (find)
+    public string[] common;     // intressen du har gemensamt med din partner (matched)
+    public bool on;             // skriver/skriver inte (typing)
+    public bool bot;            // partnern är syncBot (matched)
+    public int id;              // meddelandets nummer i samtalet (chat), eller vilket meddelande en reaktion gäller
 }
 
 /// <summary>
@@ -44,8 +50,7 @@ public class NetClient : MonoBehaviour
 
     void Update()
     {
-        Action action;
-        while (mainThread.TryDequeue(out action)) action();
+        while (mainThread.TryDequeue(out Action action)) action();
     }
 
     void OnDestroy()
@@ -60,6 +65,11 @@ public class NetClient : MonoBehaviour
         {
             if (!owner.IsCancellationRequested) action();
         });
+    }
+
+    void PostDisconnected(CancellationTokenSource owner, string reason)
+    {
+        Post(owner, () => OnDisconnected?.Invoke(reason));
     }
 
     public async void Connect(string url)
@@ -77,19 +87,17 @@ public class NetClient : MonoBehaviour
         }
         catch (Exception e)
         {
-            string message = "Kunde inte ansluta: " + e.Message;
-            Post(myCts, () => { if (OnDisconnected != null) OnDisconnected(message); });
+            PostDisconnected(myCts, "Kunde inte ansluta: " + e.Message);
             return;
         }
 
-        Post(myCts, () => { if (OnConnected != null) OnConnected(); });
+        Post(myCts, () => OnConnected?.Invoke());
         await ReceiveLoop(mySocket, myCts);
     }
 
     async Task ReceiveLoop(ClientWebSocket mySocket, CancellationTokenSource myCts)
     {
         var buffer = new byte[8192];
-        string reason = "Anslutningen bröts.";
 
         try
         {
@@ -103,7 +111,7 @@ public class NetClient : MonoBehaviour
                         result = await mySocket.ReceiveAsync(new ArraySegment<byte>(buffer), myCts.Token);
                         if (result.MessageType == WebSocketMessageType.Close)
                         {
-                            Post(myCts, () => { if (OnDisconnected != null) OnDisconnected("Servern stängde anslutningen."); });
+                            PostDisconnected(myCts, "Servern stängde anslutningen.");
                             return;
                         }
                         ms.Write(buffer, 0, result.Count);
@@ -117,20 +125,27 @@ public class NetClient : MonoBehaviour
         }
         catch (Exception e)
         {
-            reason = "Anslutningen bröts: " + e.Message;
+            PostDisconnected(myCts, "Anslutningen bröts: " + e.Message);
+            return;
         }
 
-        Post(myCts, () => { if (OnDisconnected != null) OnDisconnected(reason); });
+        PostDisconnected(myCts, "Anslutningen bröts.");
     }
 
     void Dispatch(string json)
     {
-        Msg msg = null;
-        try { msg = JsonUtility.FromJson<Msg>(json); }
-        catch (Exception) { /* trasigt meddelande, ignorera */ }
+        Msg msg;
+        try
+        {
+            msg = JsonUtility.FromJson<Msg>(json);
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning("Ignorerade ett trasigt meddelande från servern: " + e.Message);
+            return;
+        }
 
-        if (msg != null && !string.IsNullOrEmpty(msg.type) && OnMessage != null)
-            OnMessage(msg);
+        if (msg != null && !string.IsNullOrEmpty(msg.type)) OnMessage?.Invoke(msg);
     }
 
     public async void Send(Msg msg)
@@ -145,13 +160,12 @@ public class NetClient : MonoBehaviour
         {
             if (mySocket.State == WebSocketState.Open)
             {
-                await mySocket.SendAsync(
-                    new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None);
+                await mySocket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None);
             }
         }
         catch (Exception)
         {
-            // Anslutningen är på väg ner. Mottagningsloopen rapporterar det.
+            // Anslutningen är på väg ner. Mottagningsloopen märker det och rapporterar via OnDisconnected.
         }
         finally
         {
@@ -162,7 +176,7 @@ public class NetClient : MonoBehaviour
     /// <summary>Stänger anslutningen utan att OnDisconnected anropas.</summary>
     public void Close()
     {
-        if (cts != null) cts.Cancel();
+        cts?.Cancel();
         if (socket != null)
         {
             try
@@ -170,7 +184,10 @@ public class NetClient : MonoBehaviour
                 socket.Abort();
                 socket.Dispose();
             }
-            catch (Exception) { }
+            catch (Exception)
+            {
+                // Socketen var redan stängd, inget mer att göra.
+            }
         }
         socket = null;
         cts = null;

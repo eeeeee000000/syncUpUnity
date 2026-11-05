@@ -1,0 +1,16 @@
+# Lägger upp syncUp-servern på Render (gratis). Se "Köra online" i README.md.
+services:
+  - type: web
+    name: syncup
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /status
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Nyckeln till adminpanelen. Render hittar på en lång slumpad nyckel; du ser den under "Environment".
+      - key: ADMIN_KEY
+        generateValue: true
