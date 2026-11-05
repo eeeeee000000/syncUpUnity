@@ -709,7 +709,7 @@ public class ChatApp : MonoBehaviour
         {
             var layout = bubble.GetComponent<LayoutElement>();
             bubbles[id] = new BubbleInfo { row = row.gameObject, layout = layout, baseWidth = layout.preferredWidth };
-            bubble.GetComponent<Image>().raycastTarget = true;
+            bubble.GetComponentInChildren<Image>().raycastTarget = true;
             var button = bubble.AddComponent<Button>();
             button.transition = Selectable.Transition.None;
             button.onClick.AddListener(() => TogglePicker(id, mine));
@@ -820,9 +820,16 @@ public class ChatApp : MonoBehaviour
     // Rundad ruta runt texterna. Lika bred som texten, men högst maxWidth (sen radbryts den).
     static GameObject Box(Transform row, Color color, float radius, float maxWidth, params Text[] texts)
     {
-        var go = new GameObject("Bubbla", typeof(RectTransform), typeof(Image), typeof(VerticalLayoutGroup), typeof(LayoutElement));
+        var go = new GameObject("Bubbla", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(LayoutElement));
         go.transform.SetParent(row, false);
-        var image = go.GetComponent<Image>();
+
+        // Bakgrunden ligger i ett eget objekt som layouten ignorerar. Annars räknar layouten
+        // med den rundade bildens minsta storlek och bubblan blir för hög.
+        var background = new GameObject("Bakgrund", typeof(RectTransform), typeof(Image), typeof(LayoutElement));
+        background.transform.SetParent(go.transform, false);
+        background.GetComponent<LayoutElement>().ignoreLayout = true;
+        Ui.Stretch((RectTransform)background.transform);
+        var image = background.GetComponent<Image>();
         image.color = color;
         image.raycastTarget = false;
         Ui.Round(image, radius);
@@ -832,8 +839,11 @@ public class ChatApp : MonoBehaviour
         layout.spacing = 2f;
         layout.childControlWidth = true;
         layout.childControlHeight = true;
-        layout.childForceExpandWidth = true;
+        layout.childForceExpandWidth = false; // true gör att bubblan vill ta hela raden
         layout.childForceExpandHeight = false;
+        layout.childAlignment = texts.Length > 0 && texts[0].alignment == TextAnchor.UpperCenter
+            ? TextAnchor.UpperCenter
+            : TextAnchor.UpperLeft;
 
         float textWidth = 0f;
         foreach (Text t in texts)
@@ -841,7 +851,9 @@ public class ChatApp : MonoBehaviour
             t.transform.SetParent(go.transform, false);
             textWidth = Mathf.Max(textWidth, t.preferredWidth);
         }
-        go.GetComponent<LayoutElement>().preferredWidth = Mathf.Min(textWidth + layout.padding.horizontal + 2f, maxWidth);
+        var size = go.GetComponent<LayoutElement>();
+        size.preferredWidth = Mathf.Min(textWidth + layout.padding.horizontal + 2f, maxWidth);
+        size.flexibleWidth = 0f;
         return go;
     }
 
