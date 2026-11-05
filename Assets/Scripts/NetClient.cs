@@ -7,36 +7,29 @@ using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 
-/// <summary>
-/// Ett meddelande som skickas till eller tas emot från servern (som JSON).
-/// Alla meddelandetyper delar samma fält, de som inte används lämnas tomma.
-/// Hela protokollet beskrivs i server/hub.js.
-/// </summary>
+// Alla meddelanden använder samma klass, fält som inte behövs är tomma
 [Serializable]
 public class Msg
 {
-    public string type;         // anon, register, login, find, next, bot, chat, typing, icebreaker, react, report, ...
-    public string name;         // användarnamn (register/login) eller ditt namn (welcome/auth_ok)
+    public string type;
+    public string name;
     public string password;
-    public string text;         // chattext, infotext, isbrytarfråga eller meddelande från admin
-    public string sender;       // vem som skrev ett chattmeddelande eller bad om en isbrytare
-    public string partner;      // vem du blev matchad med
-    public string reason;       // orsak vid rapport
-    public string error;        // felmeddelande vid inloggning
-    public string mode;         // anon eller account
-    public int online;          // antal anslutna just nu
-    public string[] interests;  // dina intressen (find)
-    public string[] common;     // intressen du har gemensamt med din partner (matched)
-    public bool on;             // skriver/skriver inte (typing)
-    public bool bot;            // partnern är syncBot (matched)
-    public int id;              // meddelandets nummer i samtalet (chat), eller vilket meddelande en reaktion gäller
+    public string text;
+    public string sender;
+    public string partner;
+    public string reason;
+    public string error;
+    public string mode;
+    public int online;
+    public string[] interests;
+    public string[] common;     // gemensamma intressen
+    public bool on;             // för typing
+    public bool bot;
+    public int id;              // meddelandets nummer, används för reaktioner
 }
 
-/// <summary>
-/// Tunn WebSocket-klient. Nätverkskoden körs i bakgrunden men alla events
-/// (OnConnected, OnDisconnected, OnMessage) anropas på Unitys huvudtråd.
-/// Fungerar i editorn och i Windows/Mac/Linux/Android/iOS-byggen, inte i WebGL.
-/// </summary>
+// WebSocket-klient. Tar emot i bakgrunden men alla events körs på Unitys huvudtråd.
+// Funkar inte i WebGL.
 public class NetClient : MonoBehaviour
 {
     public event Action OnConnected;
@@ -58,7 +51,7 @@ public class NetClient : MonoBehaviour
         Close();
     }
 
-    /// <summary>Lägger en åtgärd i kö till huvudtråden, men bara om anslutningen inte stängts under tiden.</summary>
+    // Körs på huvudtråden, om anslutningen inte stängts innan dess
     void Post(CancellationTokenSource owner, Action action)
     {
         mainThread.Enqueue(() =>
@@ -141,7 +134,7 @@ public class NetClient : MonoBehaviour
         }
         catch (Exception e)
         {
-            Debug.LogWarning("Ignorerade ett trasigt meddelande från servern: " + e.Message);
+            Debug.LogWarning("Trasigt meddelande från servern: " + e.Message);
             return;
         }
 
@@ -165,7 +158,7 @@ public class NetClient : MonoBehaviour
         }
         catch (Exception)
         {
-            // Anslutningen är på väg ner. Mottagningsloopen märker det och rapporterar via OnDisconnected.
+            // Anslutningen håller på att stängas, ReceiveLoop tar hand om det
         }
         finally
         {
@@ -173,7 +166,7 @@ public class NetClient : MonoBehaviour
         }
     }
 
-    /// <summary>Stänger anslutningen utan att OnDisconnected anropas.</summary>
+    // Stänger utan att OnDisconnected körs
     public void Close()
     {
         cts?.Cancel();
@@ -186,7 +179,7 @@ public class NetClient : MonoBehaviour
             }
             catch (Exception)
             {
-                // Socketen var redan stängd, inget mer att göra.
+                // redan stängd
             }
         }
         socket = null;

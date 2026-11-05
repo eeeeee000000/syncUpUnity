@@ -1,12 +1,7 @@
 'use strict';
 
-/*
- * miniws – en minimal WebSocket-server (RFC 6455) utan externa beroenden.
- *
- * Räcker för syncUp: handskakning, text-/binärmeddelanden, fragmentering,
- * ping/pong, stängning och maxstorlek. Ingen komprimering och inga underprotokoll.
- * API:t liknar paketet "ws" (WebSocketServer, ws.send/ping/close/terminate, events).
- */
+// En liten WebSocket-server (RFC 6455) så att vi inte behöver installera några paket.
+// Fungerar ungefär som paketet "ws".
 
 const crypto = require('crypto');
 const { EventEmitter } = require('events');
@@ -35,7 +30,7 @@ class WebSocket extends EventEmitter {
     socket.on('error', () => this._finish());
   }
 
-  // ---------- Skicka
+  // Skicka
 
   _sendFrame(opcode, payload) {
     if (this.socket.destroyed || !this.socket.writable) return;
@@ -83,7 +78,7 @@ class WebSocket extends EventEmitter {
     this.socket.destroy();
   }
 
-  // ---------- Ta emot
+  // Ta emot
 
   _onData(chunk) {
     if (this.readyState !== OPEN) return;

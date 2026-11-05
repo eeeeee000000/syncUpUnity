@@ -5,19 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>syncUp – Adminpanel</title>
 <style>
-  /* Samma färger som appen */
   :root {
     --bg: #18191c; --panel: #222327; --panel2: #303136; --button: #3a3b40;
     --text: #f2f2f3; --muted: #8e8f94;
     --blue: #3d78d9; --green: #3f9e6a; --red: #c9483e; --amber: #c98a2b; --coral: #e0704a;
-    --warm-top: #2d1b2e; --warm-bottom: #7a3f26;
+    --warm: #5c3328;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 "Segoe UI", system-ui, Arial, sans-serif; }
 
   header {
     display: flex; align-items: center; gap: 12px; padding: 18px 24px;
-    background: linear-gradient(100deg, var(--warm-top), var(--warm-bottom));
+    background: var(--warm);
   }
   header h1 { margin: 0; font-size: 22px; }
   header h1 small { font-weight: normal; opacity: 0.7; margin-left: 6px; font-size: 16px; }
@@ -56,16 +55,15 @@
   pre { margin: 0 0 10px; padding: 12px 14px; background: var(--bg); border-radius: 10px; white-space: pre-wrap; font-size: 13px; }
   .note { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
 
-  /* Bjud in: QR-kod + adress */
   .invite { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
   .qr { width: 160px; height: 160px; background: #fff; border-radius: 12px; padding: 8px; flex: none; }
   .qr svg { width: 100%; height: 100%; display: block; }
   .invite .url { font-size: 22px; font-weight: 700; word-break: break-all; }
   .invite .other { color: var(--muted); font-size: 13px; margin-top: 4px; }
 
-  /* Stor QR-kod för projektorn */
+  /* stor QR-kod för projektorn */
   #big { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px;
-    background: linear-gradient(var(--warm-top), var(--warm-bottom)); cursor: pointer; z-index: 10; }
+    background: var(--warm); cursor: pointer; z-index: 10; }
   #big h2 { margin: 0; font-size: 44px; }
   #big .qr { width: min(60vh, 80vw); height: min(60vh, 80vw); padding: 18px; border-radius: 24px; }
   #big .url { font-size: clamp(22px, 4vw, 40px); font-weight: 700; }
@@ -144,7 +142,19 @@
 <script>
 'use strict';
 
-const KEY = new URLSearchParams(location.search).get('key') || '';
+// Tar bort nyckeln från adressfältet så att den inte syns på projektorn
+const KEY = (() => {
+  const fromUrl = new URLSearchParams(location.search).get('key');
+  let key = fromUrl || '';
+  try {
+    if (fromUrl) sessionStorage.setItem('syncUpAdminKey', fromUrl);
+    else key = sessionStorage.getItem('syncUpAdminKey') || '';
+  } catch {
+    // sessionStorage avstängt
+  }
+  if (fromUrl) history.replaceState(null, '', location.pathname);
+  return key;
+})();
 const MODE = { anon: 'Anonym', account: 'Konto' };
 const INTEREST = { spel: 'Spel', musik: 'Musik', sport: 'Sport', film: 'Film & serier', bocker: 'Böcker',
   mat: 'Mat', djur: 'Djur', resor: 'Resor', teknik: 'Teknik', konst: 'Konst' };
@@ -193,19 +203,17 @@ async function act(path, body, okText) {
   }
 }
 
-// ---------------------------------------------------------------- QR-kod
-
+// QR-kod
 let shownUrl = null;
 
 function qrSvg(url) {
-  const qr = qrcode(0, 'M'); // 0 = välj storlek själv, M = tål att en del av koden är skymd
+  const qr = qrcode(0, 'M');
   qr.addData(url);
   qr.make();
   return qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
 }
 
 function renderInvite(urls) {
-  // Från den här datorn fungerar localhost; adressen i nätverket är den andra ska använda
   const url = urls[0] || location.origin;
   if (url === shownUrl) return;
   shownUrl = url;
@@ -218,8 +226,7 @@ $('showBig').addEventListener('click', () => $('big').classList.remove('hidden')
 $('big').addEventListener('click', () => $('big').classList.add('hidden'));
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('big').classList.add('hidden'); });
 
-// ---------------------------------------------------------------- Översikt
-
+// Översikt
 function render(s) {
   renderInvite(s.joinUrls || []);
 

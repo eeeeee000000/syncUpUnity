@@ -1,45 +1,32 @@
 'use strict';
 
-/*
- * syncUp – server
- *
- * Startar allt och kopplar ihop delarna:
- *   hub.js       anslutningar, matchning, chatt, syncBot   (protokollet beskrivs där)
- *   accounts.js  konton och lösenord
- *   filter.js    ordfilter och dolda kontaktuppgifter
- *   reports.js   rapporter i reports.log
- *   admin.js     adminpanelen på /admin
- *   public/      webbversionen av chatten
- *
- * Två sätt att köra:
- *   Lokalt:  "Starta syncUp.bat" (eller npm start). Klasskompisar ansluter via datorns adress i nätverket.
- *   Online:  på Render (se render.yaml och README). Upptäcks automatiskt, eller sätt HOSTED=1.
- *
- * Inställningar via miljövariabler: PORT, DATA_DIR, ADMIN_KEY, HOSTED, PUBLIC_URL, INTEREST_WAIT_MS, BOT_SPEED
- */
+// syncUp-servern. Kör med "Starta syncUp.bat" eller npm start.
+// Inställningar: PORT, DATA_DIR, ADMIN_KEY, HOSTED, PUBLIC_URL, INTEREST_WAIT_MS, BOT_SPEED
 
 const http = require('http');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
-const { WebSocketServer } = require('./miniws'); // egen minimal WebSocket-server, inga beroenden
+const { WebSocketServer } = require('./miniws');
 const { Accounts } = require('./accounts');
 const { createFilter } = require('./filter');
 const { Reports } = require('./reports');
 const { createHub } = require('./hub');
 const { createAdmin } = require('./admin');
+const { ConnectionCounter, clientIp, securityHeaders } = require('./security');
 
 const PORT = Number(process.env.PORT) || 8080;
 const DATA_DIR = process.env.DATA_DIR || __dirname;
-// Online sätter Render RENDER och RENDER_EXTERNAL_URL själv
+// Render sätter RENDER och RENDER_EXTERNAL_URL
 const HOSTED = process.env.HOSTED === '1' || !!process.env.RENDER;
 const PUBLIC_URL = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || '').replace(/\/$/, '');
-// Online nås adminpanelen från hela internet, så då behövs en längre nyckel
+// Längre nyckel online eftersom adminpanelen då går att nå från internet
 const ADMIN_KEY = process.env.ADMIN_KEY || crypto.randomBytes(HOSTED ? 16 : 6).toString('hex');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const PING_INTERVAL_MS = 30000;
 const MATCH_INTERVAL_MS = 1000;
+const MAX_CONNECTIONS_PER_IP = Number(process.env.MAX_CONNECTIONS_PER_IP) || 20;
 
 const accounts = new Accounts(path.join(DATA_DIR, 'users.json'));
 const filter = createFilter(path.join(__dirname, 'badwords.txt'));
@@ -53,13 +40,11 @@ const hub = createHub({
 });
 const admin = createAdmin({ hub, accounts, reports, key: ADMIN_KEY, allowRemote: HOSTED, joinUrls });
 
-/** Adresserna man går till för att chatta, så att adminpanelen kan visa dem som QR-kod. */
+// Adresserna som visas som QR-kod i adminpanelen
 function joinUrls() {
   if (PUBLIC_URL) return [PUBLIC_URL];
   return lanAddresses().map((ip) => `http://${ip}:${PORT}`);
 }
-
-// ---------------------------------------------------------------- Webbsidan
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -72,7 +57,7 @@ const MIME = {
 
 function serveStatic(res, pathname) {
   const file = path.normalize(path.join(PUBLIC_DIR, pathname === '/' ? 'index.html' : pathname));
-  if (!file.startsWith(PUBLIC_DIR + path.sep)) return notFound(res); // stoppa ../-trick
+  if (!file.startsWith(PUBLIC_DIR + path.sep)) return notFound(res); // inga ../
   fs.stat(file, (err, stat) => {
     if (err || !stat.isFile()) return notFound(res);
     res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' });
@@ -87,35 +72,42 @@ function notFound(res) {
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
+  const headers = securityHeaders(url.pathname === '/admin' || url.pathname.startsWith('/admin/'));
+  for (const [name, value] of Object.entries(headers)) res.setHeader(name, value);
   if (admin.handle(req, res, url)) return;
   if (url.pathname === '/status') {
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
     return res.end(`syncUp-servern körs. Online just nu: ${hub.onlineCount}\n`);
   }
-  if (req.method !== 'GET') return notFound(res);
+  if (req.method !== 'GET' && req.method !== 'HEAD') return notFound(res);
   let pathname;
   try {
     pathname = decodeURIComponent(url.pathname);
   } catch {
-    return notFound(res); // trasig adress, t.ex. "%E0"
+    return notFound(res);
   }
   serveStatic(res, pathname);
 });
 
-// ---------------------------------------------------------------- WebSocket
-
 const wss = new WebSocketServer({ server, maxPayload: 4096 });
+const connections = new ConnectionCounter(MAX_CONNECTIONS_PER_IP);
 
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, req) => {
+  const ip = clientIp(req, HOSTED);
+  if (!connections.add(ip)) {
+    ws.close(1008);
+    return;
+  }
+  ws.on('close', () => connections.remove(ip));
   ws.isAlive = true;
   ws.on('pong', () => {
     ws.isAlive = true;
   });
   ws.on('error', () => {});
-  hub.attach(ws);
+  hub.attach(ws, ip);
 });
 
-// Stäng döda anslutningar
+// Stänger anslutningar som slutat svara
 setInterval(() => {
   for (const ws of wss.clients) {
     if (!ws.isAlive) {
@@ -127,12 +119,8 @@ setInterval(() => {
   }
 }, PING_INTERVAL_MS);
 
-// Matcha igen när väntetider gått ut (intressen, "undvik samma person")
 setInterval(hub.tick, MATCH_INTERVAL_MS);
 
-// ---------------------------------------------------------------- Start
-
-/** IPv4-adresser i det lokala nätverket, så att klasskompisar vet vart de ska ansluta. */
 function lanAddresses() {
   return Object.values(os.networkInterfaces())
     .flat()
@@ -163,12 +151,11 @@ server.listen(PORT, () => {
   const adminUrl = `http://localhost:${PORT}/admin?key=${ADMIN_KEY}`;
   console.log(`Adminpanel (bara på den här datorn): ${adminUrl}`);
   if (process.env.OPEN_BROWSER === '1') {
-    openInBrowser(`http://localhost:${PORT}`); // chatten
+    openInBrowser(`http://localhost:${PORT}`);
     openInBrowser(adminUrl);
   }
 });
 
-/** Öppnar en adress i standardwebbläsaren (används av "Starta syncUp.bat"). */
 function openInBrowser(url) {
   const { exec } = require('child_process');
   const command =

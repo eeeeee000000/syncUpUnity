@@ -1,6 +1,6 @@
 'use strict';
 
-// Rapporter: sparas som läsbara textblock i reports.log.
+// Rapporter sparas som text i reports.log.
 
 const fs = require('fs');
 
@@ -11,7 +11,6 @@ class Reports {
     this.file = file;
   }
 
-  /** Sparar en rapport. `history` är samtalets senaste meddelanden: [{ t, from, text }]. */
   write({ reporter, reporterMode, reported, reason, history }, done) {
     const lines = history.map((h) => `[${new Date(h.t).toISOString().slice(11, 19)}] ${h.from}: ${h.text}`);
     const block = [
@@ -27,7 +26,7 @@ class Reports {
     fs.appendFile(this.file, block, done);
   }
 
-  /** Alla rapporter som textblock, nyast först. */
+  // nyast först
   read() {
     let text;
     try {

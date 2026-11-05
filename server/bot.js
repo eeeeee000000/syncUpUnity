@@ -1,21 +1,18 @@
 'use strict';
 
-// syncBot: en enkel regelbaserad chattbot så att man kan testa appen även när ingen annan är online.
+// syncBot: en enkel bot att testa med när ingen annan är online.
 
 const BOT_NAME = 'syncBot';
 
 const GREETING = 'Hej! Jag är en testbot. Skriv något så svarar jag.';
 
-/**
- * Matchar hela ord, även ord med å, ä och ö (vanliga \b räknar inte dem som bokstäver).
- * Ett ord som slutar på * får fortsätta, t.ex. 'spel*' matchar "spelar" och "spelet".
- */
+// \b funkar inte med å, ä, ö. 'spel*' matchar även "spelar", "spelet" osv.
 function words(...list) {
   const parts = list.map((w) => (w.endsWith('*') ? w.slice(0, -1) + '\\p{L}*' : w));
   return new RegExp('(?<!\\p{L})(' + parts.join('|') + ')(?!\\p{L})', 'u');
 }
 
-// Första regeln som matchar vinner, så de mest specifika ligger först.
+// Första som matchar vinner
 const RULES = [
   [words('hejdå', 'hej då', 'vi ses', 'bye', 'ses'), 'Hejdå! Tryck på Nästa för att hitta någon ny att prata med.'],
   [words('vad heter du', 'vem är du', 'ditt namn'), 'Jag heter syncBot. Jag finns här så att du kan testa syncUp även när ingen annan är online.'],
@@ -43,7 +40,7 @@ const FALLBACKS = [
   'Kul! Tryck på Fråga om du vill ha något att prata om.',
 ];
 
-/** Väljer ett svar på det användaren skrev. `last` är förra svaret, så att boten inte upprepar sig. */
+// last = förra svaret, så att den inte säger samma sak två gånger
 function botReply(text, last) {
   const t = String(text).toLowerCase();
   for (const [re, answer] of RULES) {
@@ -61,7 +58,6 @@ function botIcebreakerReply() {
   return 'Oj, svår fråga! Jag får fundera lite. Vad svarar du själv?';
 }
 
-/** Hur länge boten "skriver" innan svaret kommer, så att det känns mer naturligt. */
 function typingDelay(answer, speed = 1) {
   return Math.min(2500, 600 + answer.length * 20) * speed;
 }

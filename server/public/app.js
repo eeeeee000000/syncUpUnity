@@ -1,9 +1,6 @@
 'use strict';
 
-/*
- * syncUp – webbversionen av chatten.
- * Pratar samma protokoll som Unity-appen, så webb- och Unity-användare kan chatta med varandra.
- */
+// Webbversionen av syncUp. Samma meddelanden som Unity-appen.
 
 const INTERESTS = [
   ['spel', 'Spel'], ['musik', 'Musik'], ['sport', 'Sport'], ['film', 'Film & serier'], ['bocker', 'Böcker'],
@@ -12,22 +9,22 @@ const INTERESTS = [
 const INTEREST_LABEL = Object.fromEntries(INTERESTS);
 const MAX_INTERESTS = 5;
 const REPORT_REASONS = ['Spam', 'Elakt språk', 'Olämpligt innehåll', 'Annat'];
-const REACTIONS = ['♥', '★', '☺']; // samma som servern (content.js)
-const TYPING_RESEND_MS = 2500;   // skicka "skriver" igen så här ofta medan man skriver
-const TYPING_IDLE_MS = 3000;     // sluta visa "skriver" när man varit still så här länge
-const TYPING_SHOW_MS = 6000;     // dölj partnerns "skriver" om inget hörts på så här länge
+const REACTIONS = ['♥', '★', '☺'];
+const TYPING_RESEND_MS = 2500;
+const TYPING_IDLE_MS = 3000;
+const TYPING_SHOW_MS = 6000;
 const MAX_ROWS = 200;
 
 const $ = (id) => document.getElementById(id);
 
 const state = {
   ws: null,
-  entry: 'home',          // skärmen vi kom från, dit går vi tillbaka vid fel
-  pendingHello: null,     // första meddelandet som skickas när anslutningen är uppe
+  entry: 'home',
+  pendingHello: null,
   kickedReason: null,
   myName: null,
   partner: null,
-  lastPartner: null,     // den senaste man chattat med, går att rapportera även efter att den lämnat
+  lastPartner: null, // går att rapportera även efter att personen lämnat
   partnerIsBot: false,
   online: 0,
   canReport: false,
@@ -35,11 +32,10 @@ const state = {
   typingSentAt: 0,
   typingIdleTimer: null,
   partnerTypingTimer: null,
-  reactions: new Map(),   // meddelande-id -> Map(namn -> tecken)
+  reactions: new Map(), // meddelande-id -> Map(namn -> tecken)
 };
 
-// ---------------------------------------------------------------- Skärmar
-
+// Skärmar
 function show(screen) {
   for (const id of ['home', 'auth', 'chat']) $(id).classList.toggle('hidden', id !== screen);
   if (screen === 'chat') $('chatInput').focus();
@@ -77,8 +73,7 @@ function buildReasons() {
   }
 }
 
-// ---------------------------------------------------------------- Nätverk
-
+// Nätverk
 function serverUrl() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   return proto + '//' + (location.host || 'localhost:8080');
@@ -106,12 +101,12 @@ function connect(hello, entry) {
     try {
       m = JSON.parse(ev.data);
     } catch {
-      return; // trasigt meddelande, ignorera
+      return;
     }
     if (m && typeof m.type === 'string') handleMessage(m);
   });
   ws.addEventListener('close', () => {
-    if (state.ws !== ws) return; // en gammal anslutning som vi själva stängt
+    if (state.ws !== ws) return; // gammal anslutning
     state.ws = null;
     const reason = state.kickedReason || 'Anslutningen bröts.';
     resetSession();
@@ -120,7 +115,6 @@ function connect(hello, entry) {
   });
 }
 
-/** Stänger anslutningen utan att visa något felmeddelande. */
 function closeSocket() {
   const ws = state.ws;
   state.ws = null;
@@ -237,8 +231,7 @@ function refreshUi() {
   $('botBtn').classList.toggle('hidden', has);
 }
 
-// ---------------------------------------------------------------- "Skriver..."
-
+// "Skriver..."
 function onTyping() {
   if (!state.partner) return;
   const now = Date.now();
@@ -263,11 +256,10 @@ function setPartnerTyping(on) {
   if (on) state.partnerTypingTimer = setTimeout(() => setPartnerTyping(false), TYPING_SHOW_MS);
 }
 
-// ---------------------------------------------------------------- Ljud
-
+// Ljud
 let audio = null;
 
-/** Ett kort "pling" när ett meddelande kommer och fliken inte är i fokus. */
+// Pling när fliken inte är i fokus
 function notify() {
   if (document.hasFocus()) return;
   try {
@@ -281,22 +273,21 @@ function notify() {
     osc.start();
     osc.stop(audio.currentTime + 0.25);
   } catch {
-    /* ljud stöds inte, inget att göra */
+    // inget ljud i den här webbläsaren
   }
 }
 
-// ---------------------------------------------------------------- Meddelandelistan
-
+// Meddelandelistan
 const time = () => new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
 
 function text(tag, value, className) {
   const node = document.createElement(tag);
-  node.textContent = value; // textContent, aldrig innerHTML, så ingen kan skicka in egen HTML
+  node.textContent = value; // aldrig innerHTML
   if (className) node.className = className;
   return node;
 }
 
-// Dämpade färger för avatarerna, samma namn får alltid samma färg
+// Samma färger och uträkning som i Unity
 const AVATAR_COLORS = ['#5b6ee1', '#3f9e8f', '#c0703f', '#9a5bc4', '#c2577a', '#5f8f3e'];
 
 function setAvatar(name) {
@@ -312,7 +303,6 @@ function setAvatar(name) {
   avatar.style.background = AVATAR_COLORS[hash % AVATAR_COLORS.length];
 }
 
-/** Lägger till något i listan och scrollar ner om man redan var längst ner (eller om man själv skrev). */
 function addRow(node, forceScroll = false) {
   const list = $('messages');
   const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 80;
@@ -325,7 +315,7 @@ function addChat(sender, value, id) {
   const mine = sender === state.myName;
   const last = $('messages').lastElementChild;
   const row = document.createElement('div');
-  // "first" = första bubblan i en följd från samma person, får lite luft ovanför
+  // lite luft när en ny person börjar skriva
   const sameSender = last && last.classList.contains('row') && last.dataset.sender === sender;
   row.className = 'row ' + (mine ? 'me' : 'them') + (sameSender ? '' : ' first');
   row.dataset.sender = sender;
@@ -339,9 +329,7 @@ function addChat(sender, value, id) {
   addRow(row, mine);
 }
 
-// ---------------------------------------------------------------- Reaktioner
-
-/** Visar (eller döljer) en liten rad med reaktioner precis under bubblan. */
+// Reaktioner
 function togglePicker(row) {
   const open = $('messages').querySelector('.picker');
   const wasThisRow = open && open.previousElementSibling === row;
@@ -363,7 +351,6 @@ function togglePicker(row) {
   row.after(picker);
 }
 
-/** Uppdaterar en reaktion och ritar om märket på bubblan, t.ex. "♥ 2  ★". */
 function setReaction(id, sender, emoji) {
   if (!state.reactions.has(id)) state.reactions.set(id, new Map());
   const onMessage = state.reactions.get(id);
@@ -414,8 +401,7 @@ function clearChat() {
   state.reactions.clear();
 }
 
-// ---------------------------------------------------------------- Knappar
-
+// Knappar
 $('anonBtn').addEventListener('click', () => connect({ type: 'anon' }, 'home'));
 
 $('openAuthBtn').addEventListener('click', () => {

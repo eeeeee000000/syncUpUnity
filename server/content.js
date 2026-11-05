@@ -1,8 +1,7 @@
 'use strict';
 
-// Texter och listor som servern använder: intressen och isbrytarfrågor.
+// Intressen, isbrytarfrågor och reaktioner.
 
-/** Intressen man kan välja i appen. Id:t skickas över nätet, appen visar sin egen etikett. */
 const INTERESTS = ['spel', 'musik', 'sport', 'film', 'bocker', 'mat', 'djur', 'resor', 'teknik', 'konst'];
 
 const ICEBREAKERS = [
@@ -24,10 +23,7 @@ const ICEBREAKERS = [
   'Morgonmänniska eller nattuggla?',
 ];
 
-/**
- * Reaktioner man kan sätta på ett meddelande. Bara tecken som finns i vanliga typsnitt,
- * så att de syns likadant i Unity-appen (som inte kan rita färg-emoji) och på webben.
- */
+// Unity kan inte visa färg-emoji, därför vanliga tecken
 const REACTIONS = ['♥', '★', '☺'];
 
 module.exports = { INTERESTS, ICEBREAKERS, REACTIONS };

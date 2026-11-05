@@ -6,18 +6,15 @@ using System.Net.Sockets;
 using UnityEditor;
 using Debug = UnityEngine.Debug;
 
-/// <summary>
-/// Startar syncUp-servern (Node.js) automatiskt när du trycker Play i Unity, och stänger den när du
-/// slutar. Gör ingenting om en server redan körs på port 8080, t.ex. från "Starta syncUp.bat".
-/// Stängs av och på i menyn syncUp > Starta servern vid Play.
-/// </summary>
+// Startar servern när man trycker Play och stänger den när man slutar.
+// Gör inget om en server redan körs. Kan stängas av i menyn syncUp.
 [InitializeOnLoad]
 static class LocalServerLauncher
 {
     const int Port = 8080;
     const string MenuPath = "syncUp/Starta servern vid Play";
     const string EnabledPref = "syncUp.autoStartServer";
-    // Unity laddar om alla skript när Play startar, så processens id sparas här i stället för i en vanlig variabel
+    // Skripten laddas om när Play startar, så process-id:t måste sparas här
     const string PidKey = "syncUp.serverPid";
 
     static LocalServerLauncher()
@@ -36,7 +33,7 @@ static class LocalServerLauncher
     static void ToggleEnabled()
     {
         Enabled = !Enabled;
-        Debug.Log("syncUp: servern startas " + (Enabled ? "automatiskt vid Play." : "inte längre vid Play."));
+        Debug.Log("syncUp: servern startas " + (Enabled ? "vid Play." : "inte längre vid Play."));
     }
 
     [MenuItem(MenuPath, true)]
@@ -56,18 +53,17 @@ static class LocalServerLauncher
     {
         if (PortInUse())
         {
-            Debug.Log($"syncUp: en server körs redan på port {Port}, så ingen ny startas.");
+            Debug.Log($"syncUp: en server körs redan på port {Port}.");
             return;
         }
 
         string dir = FindServerFolder();
         if (dir == null)
         {
-            Debug.LogWarning("syncUp: hittade inte server-mappen (server/server.js). Starta servern själv.");
+            Debug.LogWarning("syncUp: hittade inte server/server.js. Starta servern själv.");
             return;
         }
 
-        // En egen nyckel varje gång, som skrivs ut här nedan så att du kan öppna adminpanelen
         string adminKey = Guid.NewGuid().ToString("N").Substring(0, 12);
         var info = new ProcessStartInfo("node", "server.js")
         {
@@ -82,12 +78,12 @@ static class LocalServerLauncher
         {
             Process process = Process.Start(info);
             SessionState.SetInt(PidKey, process.Id);
-            Debug.Log($"syncUp: startade servern. Webb: http://localhost:{Port}   " +
-                      $"Adminpanel: http://localhost:{Port}/admin?key={adminKey}");
+            Debug.Log($"syncUp: servern startad. Webb: http://localhost:{Port}   " +
+                      $"Admin: http://localhost:{Port}/admin?key={adminKey}");
         }
         catch (Win32Exception)
         {
-            Debug.LogWarning("syncUp: kunde inte starta servern. Är Node.js installerat? Ladda ner från https://nodejs.org");
+            Debug.LogWarning("syncUp: kunde inte starta servern. Är Node.js installerat? https://nodejs.org");
         }
     }
 
@@ -99,24 +95,23 @@ static class LocalServerLauncher
         try
         {
             Process process = Process.GetProcessById(pid);
-            // Kontrollera att det fortfarande är vår node-process och inte ett annat program som fått samma id
+            // Kolla att det är node, id:t kan ha återanvänts av ett annat program
             if (!process.HasExited && process.ProcessName.Equals("node", StringComparison.OrdinalIgnoreCase))
             {
                 process.Kill();
-                Debug.Log("syncUp: stängde servern.");
+                Debug.Log("syncUp: servern stängd.");
             }
         }
         catch (ArgumentException)
         {
-            // Processen finns inte längre, inget att stänga.
+            // processen finns inte längre
         }
         catch (InvalidOperationException)
         {
-            // Processen hann avslutas medan vi tittade på den.
+            // hann avslutas under tiden
         }
     }
 
-    /// <summary>server/ ligger i Unity-projektet, eller bredvid det (äldre mappstruktur).</summary>
     static string FindServerFolder()
     {
         string project = Directory.GetParent(UnityEngine.Application.dataPath).FullName;
@@ -138,7 +133,7 @@ static class LocalServerLauncher
         }
         catch (Exception)
         {
-            return false; // ingen svarade, porten är ledig
+            return false; // ingen svarade
         }
     }
 }

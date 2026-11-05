@@ -1,7 +1,6 @@
 'use strict';
 
-// Automatiskt test: startar servern, kopplar upp simulerade klienter och kontrollerar flödet.
-// Kör med: npm test
+// Startar servern och testar allt med låtsasklienter. Kör med: npm test
 
 const assert = require('assert');
 const { spawn } = require('child_process');
@@ -80,7 +79,6 @@ async function connect() {
 const ok = (text) => console.log('  ✓ ' + text);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Anropar adminpanelens API. */
 async function adminApi(pathname, body, key = ADMIN_KEY) {
   const res = await fetch(`http://127.0.0.1:${PORT}/admin/api/${pathname}`, {
     method: body ? 'POST' : 'GET',
@@ -90,13 +88,12 @@ async function adminApi(pathname, body, key = ADMIN_KEY) {
   return { status: res.status, data: await res.json() };
 }
 
-/** Ett meddelande med samma form som Unitys JsonUtility skickar: alla fält med, tomma om de inte används. */
+// Unity skickar alltid med alla fält
 const unityMsg = (fields) => ({
   type: '', name: '', password: '', text: '', sender: '', partner: '', reason: '', error: '', mode: '',
   online: 0, interests: [], common: [], on: false, bot: false, ...fields,
 });
 
-/** Ansluter anonymt och returnerar klienten och dess namn. */
 async function anonClient(mk) {
   const c = await mk();
   c.send({ type: 'anon' });
@@ -104,7 +101,7 @@ async function anonClient(mk) {
   return c;
 }
 
-// Bygger en maskad klientram (som riktiga klienter skickar) för korta meddelanden
+// Maskad ram, som en riktig klient skickar
 function maskedFrame(opcode, text, fin = true) {
   const payload = Buffer.from(text);
   const mask = crypto.randomBytes(4);
@@ -114,7 +111,7 @@ function maskedFrame(opcode, text, fin = true) {
   return Buffer.concat([header, mask, masked]);
 }
 
-// Pratar rå TCP med servern: handskakning, fragmenterat meddelande med ping mitt i
+// Rå TCP: handskakning och ett meddelande i två delar med en ping emellan
 function rawProtocolTest() {
   return new Promise((resolve, reject) => {
     const key = crypto.randomBytes(16).toString('base64');
@@ -167,7 +164,6 @@ function rawProtocolTest() {
   });
 }
 
-/** Startar en server med de inställningar som anges och väntar tills den lyssnar. */
 async function startServer(env) {
   const child = spawn('node', ['server.js'], {
     cwd: __dirname,
@@ -188,6 +184,7 @@ async function main() {
     ADMIN_KEY,
     INTEREST_WAIT_MS: String(INTEREST_WAIT_MS),
     BOT_SPEED: '0.05',
+    MAX_CONNECTIONS_PER_IP: '100', // testerna öppnar många anslutningar från samma dator
   });
 
   const sockets = [];
@@ -467,16 +464,64 @@ async function main() {
       HOSTED: '1',
       PUBLIC_URL: 'https://syncup-test.onrender.com/',
       ADMIN_KEY,
+      MAX_CONNECTIONS_PER_IP: '2',
     });
     try {
       const res = await fetch(`http://127.0.0.1:${hostedPort}/admin/api/state`, { headers: { 'X-Admin-Key': ADMIN_KEY } });
       assert.deepStrictEqual((await res.json()).joinUrls, ['https://syncup-test.onrender.com']);
       const wrong = await fetch(`http://127.0.0.1:${hostedPort}/admin/api/state`, { headers: { 'X-Admin-Key': 'fel' } });
       assert.strictEqual(wrong.status, 401);
+
+      // max 2 per IP här, den tredje ska stängas
+      const open = (port) => new Promise((resolve) => {
+        const w = new WebSocket(`ws://localhost:${port}`);
+        w.addEventListener('close', (ev) => resolve({ w, closed: ev.code }));
+        w.addEventListener('open', () => setTimeout(() => resolve({ w, closed: null }), 300));
+      });
+      const c1 = await open(hostedPort);
+      const c2 = await open(hostedPort);
+      const c3 = await open(hostedPort);
+      assert.deepStrictEqual([c1.closed, c2.closed, c3.closed], [null, null, 1008]);
+      c1.w.close();
+      c2.w.close();
     } finally {
       hosted.kill();
     }
     ok('online visas den publika adressen, och nyckeln krävs fortfarande');
+    ok('för många anslutningar från samma IP stängs (kod 1008)');
+
+    console.log('Säkerhet');
+    const homePage = await fetch(`http://127.0.0.1:${PORT}/`);
+    assert(homePage.headers.get('content-security-policy').includes("frame-ancestors 'none'"));
+    assert.strictEqual(homePage.headers.get('x-content-type-options'), 'nosniff');
+    assert.strictEqual(homePage.headers.get('referrer-policy'), 'no-referrer');
+    ok('säkerhetsrubriker skickas');
+
+    const adminPage = await fetch(`http://127.0.0.1:${PORT}/admin`);
+    assert(adminPage.ok, 'sidan ska gå att ladda om utan nyckel i adressen');
+    assert.strictEqual((await fetch(`http://127.0.0.1:${PORT}/admin/api/state?key=${ADMIN_KEY}`)).status, 401);
+    ok('adminsidan laddas utan nyckel, men API:t kräver nyckeln i en rubrik (inte i adressen)');
+
+    // 10 fel lösenord från samma IP, på flera anslutningar
+    for (let round = 0; round < 2; round++) {
+      const guesser = await mk();
+      for (let i = 0; i < 5; i++) {
+        guesser.send({ type: 'login', name: 'alice', password: 'gissning' + i });
+        await guesser.expect('auth_error');
+      }
+    }
+    const afterGuessing = await mk();
+    afterGuessing.send({ type: 'login', name: 'alice', password: 'hemligt1' });
+    assert(/För många felaktiga/.test((await afterGuessing.expect('auth_error')).error));
+    ok('för många felaktiga inloggningar från samma IP spärras, även med nya anslutningar');
+
+    const registrar = await mk();
+    registrar.send({ type: 'register', name: 'femte', password: 'hemligt5' }); // femte kontot från den här IP:n
+    await registrar.expect('auth_ok');
+    const sixth = await mk();
+    sixth.send({ type: 'register', name: 'sjatte', password: 'hemligt6' });
+    assert(/För många nya konton/.test((await sixth.expect('auth_error')).error));
+    ok('max fem nya konton per IP och timme');
 
     const big = await mk();
     const closeCode = new Promise((resolve) => big.ws.addEventListener('close', (ev) => resolve(ev.code)));

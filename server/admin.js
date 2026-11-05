@@ -1,13 +1,6 @@
 'use strict';
 
-/*
- * Adminpanelen: /admin i webbläsaren.
- *
- * Skydd:
- *   - Lokalt: bara anrop från samma dator som servern körs på släpps igenom (inte från andra i nätverket).
- *   - Online (allowRemote): panelen nås från internet, så då skyddar bara nyckeln. Använd en lång nyckel.
- *   - Alltid: man måste ha adminnyckeln, som skrivs ut när servern startar (eller sätts med ADMIN_KEY).
- */
+// Adminpanelen på /admin. Kräver nyckeln, och lokalt går den bara att öppna på serverdatorn.
 
 const fs = require('fs');
 const path = require('path');
@@ -52,13 +45,7 @@ function readJson(req) {
   });
 }
 
-/**
- * @param {object} opts
- * @param {boolean} [opts.allowRemote] släpp in anrop från andra datorer (när servern körs online)
- * @param {() => string[]} [opts.joinUrls] adresserna man går till för att chatta, visas som QR-kod
- */
 function createAdmin({ hub, accounts, reports, key, allowRemote = false, joinUrls = () => [] }) {
-  // POST-åtgärder: tar emot JSON-kroppen och svarar med { ok } eller kastar ett fel med ett svenskt meddelande
   const actions = {
     kick({ name }) {
       if (!hub.kick(name)) throw new Error('Ingen med det namnet är online.');
@@ -95,7 +82,7 @@ function createAdmin({ hub, accounts, reports, key, allowRemote = false, joinUrl
     };
   }
 
-  /** Hanterar alla /admin-adresser. Returnerar false om adressen inte hör till adminpanelen. */
+  // Returnerar false om adressen inte är en /admin-adress
   function handle(req, res, url) {
     if (url.pathname !== '/admin' && !url.pathname.startsWith('/admin/')) return false;
 
@@ -104,20 +91,16 @@ function createAdmin({ hub, accounts, reports, key, allowRemote = false, joinUrl
       return true;
     }
 
-    const given = req.headers['x-admin-key'] || url.searchParams.get('key') || '';
-    if (!safeEqual(given, key)) {
-      if (url.pathname === '/admin') {
-        res.writeHead(401, { 'Content-Type': 'text/plain; charset=utf-8' });
-        res.end('Fel eller saknad adminnyckel. Använd länken som skrivs ut när servern startar.\n');
-      } else {
-        json(res, 401, { error: 'Fel adminnyckel.' });
-      }
-      return true;
-    }
-
+    // Sidan i sig är inte hemlig, det är API:t som kräver nyckeln
     if (req.method === 'GET' && url.pathname === '/admin') {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
       fs.createReadStream(PAGE_FILE).pipe(res);
+      return true;
+    }
+
+    const given = req.headers['x-admin-key'] || '';
+    if (!safeEqual(given, key)) {
+      json(res, 401, { error: 'Fel adminnyckel. Använd länken som skrivs ut när servern startar.' });
       return true;
     }
 

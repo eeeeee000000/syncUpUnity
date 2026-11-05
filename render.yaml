@@ -1,4 +1,4 @@
-# Lägger upp syncUp-servern på Render (gratis). Se "Köra online" i README.md.
+# Inställningar för Render
 services:
   - type: web
     name: syncup
@@ -11,6 +11,6 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
-      # Nyckeln till adminpanelen. Render hittar på en lång slumpad nyckel; du ser den under "Environment".
+      # adminnyckeln, syns under Environment på Render
       - key: ADMIN_KEY
         generateValue: true

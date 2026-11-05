@@ -5,26 +5,21 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
-/// <summary>
-/// syncUp: hela appen i ett skript. Skapar sitt eget gränssnitt när du trycker Play,
-/// så du behöver inte bygga någon scen eller några prefabs. Själva ritandet sköts av Ui.cs.
-///
-/// Skärmar:  Start  ->  (Konto)  ->  Chatt   (+ en ruta för att välja rapportorsak)
-/// </summary>
+// Hela appen. Bygger sitt eget gränssnitt när man trycker Play, så scenen kan vara tom.
+// Skärmar: Start -> (Konto) -> Chatt
 [RequireComponent(typeof(NetClient))]
 public class ChatApp : MonoBehaviour
 {
-    [Tooltip("Servern när den körs på den här datorn (Starta syncUp.bat, eller Play i Unity)")]
+    [Tooltip("Servern på den här datorn")]
     public string localServer = "ws://localhost:8080";
 
-    [Tooltip("Servern online, t.ex. på Render. Byt till din egen adress när du lagt upp servern (se README).")]
-    public string onlineServer = "wss://syncup.onrender.com";
+    [Tooltip("Servern på Render")]
+    public string onlineServer = "wss://syncup-ptcn.onrender.com";
 
-    const string PrefServerMode = "syncUp.serverMode";   // "local" eller "online", sparas mellan gångerna
+    const string PrefServerMode = "syncUp.serverMode";
     const string PrefServerUrl = "syncUp.serverUrl";
-    static readonly string[] Reactions = { "♥", "★", "☺" }; // samma som servern (server/content.js)
+    static readonly string[] Reactions = { "♥", "★", "☺" }; // samma som i server/content.js
 
-    /// <summary>En pratbubbla som kan få reaktioner.</summary>
     class BubbleInfo
     {
         public GameObject row;
@@ -34,7 +29,7 @@ public class ChatApp : MonoBehaviour
         public readonly Dictionary<string, string> bySender = new Dictionary<string, string>();
     }
 
-    // Intressen man kan välja: id som skickas till servern, och etiketten som visas
+    // id skickas till servern, label visas
     static readonly (string id, string label)[] Interests =
     {
         ("spel", "Spel"), ("musik", "Musik"), ("sport", "Sport"), ("film", "Film & serier"), ("bocker", "Böcker"),
@@ -45,20 +40,17 @@ public class ChatApp : MonoBehaviour
     const int MaxInterests = 5;
     const int MaxRows = 200;
     const float MaxBubbleWidth = 560f;
-    const float TypingResendSeconds = 2.5f; // skicka "skriver" igen så här ofta medan man skriver
-    const float TypingIdleSeconds = 3f;     // sluta skicka "skriver" när man varit still så här länge
-    const float TypingShowSeconds = 6f;     // dölj partnerns "skriver" om inget hörts på så här länge
+    const float TypingResendSeconds = 2.5f;
+    const float TypingIdleSeconds = 3f;
+    const float TypingShowSeconds = 6f;
 
     static ChatApp instance;
 
-    // Startar appen automatiskt i vilken scen som helst
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Boot()
     {
         if (instance == null) new GameObject("syncUp").AddComponent<ChatApp>();
     }
-
-    // ---------------------------------------------------------------- Tillstånd
 
     NetClient net;
     Canvas canvas;
@@ -66,7 +58,7 @@ public class ChatApp : MonoBehaviour
     AudioClip pling;
 
     GameObject homeScreen, authScreen, chatScreen, reportDialog;
-    GameObject entryScreen;            // skärmen vi kom från (start eller konto), dit går vi tillbaka vid fel
+    GameObject entryScreen; // dit vi går tillbaka om anslutningen bryts
 
     InputField serverInput, userInput, passInput, chatInput;
     Text homeStatus, authStatus, chatName, chatMeta, avatarLetter, typingText, reportTitle;
@@ -78,24 +70,23 @@ public class ChatApp : MonoBehaviour
     readonly Dictionary<string, Button> interestButtons = new Dictionary<string, Button>();
     readonly Dictionary<int, BubbleInfo> bubbles = new Dictionary<int, BubbleInfo>();
     Button localBtn, onlineBtn;
-    GameObject picker;                 // raden med reaktioner som visas under en bubbla man klickat på
+    GameObject picker;
 
+    string serverMode = "local";
     int scrollFrames;
     int online;
     bool canReport;
     string myName;
     string partner;
-    string lastPartner;                // den senaste man chattat med, går att rapportera även efter att den lämnat
+    string lastPartner; // går att rapportera även efter att personen lämnat
     bool partnerIsBot;
-    string lastBubbleSender;           // för att gruppera bubblor från samma person
-    string kickedReason;               // visas när servern kopplar bort oss på grund av admin
-    Msg pendingHello;                  // första meddelandet som skickas när anslutningen är uppe
+    string lastBubbleSender;
+    string kickedReason;
+    Msg pendingHello;
 
-    float typingSentAt = -1f;          // när vi senast skickade "skriver", -1 = vi skriver inte
+    float typingSentAt = -1f;
     float lastKeystrokeAt;
     float partnerTypingUntil;
-
-    // ---------------------------------------------------------------- Unity
 
     void Awake()
     {
@@ -105,7 +96,7 @@ public class ChatApp : MonoBehaviour
             return;
         }
         instance = this;
-        Application.runInBackground = true; // så att två fönster kan chatta med varandra vid test
+        Application.runInBackground = true; // två fönster ska kunna chatta med varandra
 
         net = GetComponent<NetClient>();
         net.OnConnected += HandleConnected;
@@ -136,14 +127,14 @@ public class ChatApp : MonoBehaviour
 
     void Update()
     {
-        if (typingText == null) return; // en dubblett som håller på att förstöras
+        if (typingText == null) return;
         if (typingSentAt >= 0f && Time.unscaledTime - lastKeystrokeAt > TypingIdleSeconds) StopTyping();
         if (typingText.text.Length > 0 && Time.unscaledTime > partnerTypingUntil) SetPartnerTyping(false);
     }
 
     void LateUpdate()
     {
-        // Scrolla ner till senaste meddelandet. Görs över två frames så att layouten hunnit räknas om.
+        // Layouten räknas om först nästa frame, därför scrollas det ner två gånger
         if (scrollFrames > 0 && scroll != null)
         {
             scrollFrames--;
@@ -181,15 +172,13 @@ public class ChatApp : MonoBehaviour
 #endif
     }
 
-    // ---------------------------------------------------------------- Ljud
-
-    /// <summary>Skapar ett kort "pling" i kod, så att inga ljudfiler behövs.</summary>
     void SetUpSound()
     {
         if (FindAnyObjectByType<AudioListener>() == null) gameObject.AddComponent<AudioListener>();
         audioSource = gameObject.AddComponent<AudioSource>();
         audioSource.playOnAwake = false;
 
+        // Ett kort pling, 880 Hz som tonar ut
         const int rate = 44100;
         const float seconds = 0.25f;
         var samples = new float[(int)(rate * seconds)];
@@ -202,13 +191,10 @@ public class ChatApp : MonoBehaviour
         pling.SetData(samples, 0);
     }
 
-    /// <summary>Spelar plinget, men bara när fönstret inte är i fokus.</summary>
     void Notify()
     {
         if (!Application.isFocused) audioSource.PlayOneShot(pling);
     }
-
-    // ---------------------------------------------------------------- Gränssnitt: skärmar
 
     void BuildUI()
     {
@@ -231,7 +217,7 @@ public class ChatApp : MonoBehaviour
 
     void BuildHome()
     {
-        homeScreen = Ui.GradientScreen(canvas.transform, "Start", Ui.WarmTop, Ui.WarmBottom);
+        homeScreen = Ui.Screen(canvas.transform, "Start", Ui.Warm);
         Transform card = Ui.Card(homeScreen.transform, 520f, color: Ui.WarmCard);
 
         Ui.Label(card, "syncUp", 42, TextAnchor.MiddleCenter, Ui.TextColor, bold: true);
@@ -250,7 +236,7 @@ public class ChatApp : MonoBehaviour
         Transform grid = Ui.Grid(card, 4, new Vector2(109f, 34f), 8f);
         foreach (var (id, label) in Interests)
         {
-            string interest = id; // egen kopia till lambdan
+            string interest = id;
             interestButtons[id] = Ui.Chip(grid, label, () => ToggleInterest(interest));
         }
         Ui.Spacer(card, 8f);
@@ -263,7 +249,7 @@ public class ChatApp : MonoBehaviour
 
     void BuildAuth()
     {
-        authScreen = Ui.GradientScreen(canvas.transform, "Konto", Ui.WarmTop, Ui.WarmBottom);
+        authScreen = Ui.Screen(canvas.transform, "Konto", Ui.Warm);
         Transform card = Ui.Card(authScreen.transform, 460f, color: Ui.WarmCard);
 
         Ui.Label(card, "Logga in", 34, TextAnchor.MiddleCenter, Ui.TextColor, bold: true);
@@ -287,7 +273,6 @@ public class ChatApp : MonoBehaviour
         const float topHeight = 64f, bottomHeight = 68f, typingHeight = 24f;
         chatScreen = Ui.Screen(canvas.transform, "Chatt", Ui.Bg);
 
-        // Övre fältet: avatar, namn och antal online, sedan knappar
         RectTransform top = Ui.Bar(chatScreen.transform, true, topHeight);
         avatarLetter = Ui.Avatar(top, 42f);
         Transform who = Ui.Stack(top);
@@ -300,7 +285,6 @@ public class ChatApp : MonoBehaviour
         reportBtn = TopButton(top, "Rapportera", Ui.Red, OnReport, 112f);
         TopButton(top, "Lämna", Ui.Neutral, OnLeave, 78f);
 
-        // Undre fältet: rund textruta + skicka
         RectTransform bottom = Ui.Bar(chatScreen.transform, false, bottomHeight);
         chatInput = Ui.Input(bottom, "Skriv ett meddelande...", false, 300, 48f, 24f);
         chatInput.onEndEdit.AddListener(OnChatEndEdit);
@@ -309,7 +293,7 @@ public class ChatApp : MonoBehaviour
         sendBtn = Ui.Button(bottom, "Skicka", Ui.Accent, SendChat, 17, 48f, 24f);
         Ui.Size(sendBtn, 100f);
 
-        // Precis ovanför textrutan: "X skriver..."
+        // "X skriver..." precis ovanför textrutan
         typingText = Ui.Label(chatScreen.transform, "", 14, TextAnchor.MiddleLeft, Ui.Muted);
         var typingRect = typingText.rectTransform;
         typingRect.anchorMin = new Vector2(0f, 0f);
@@ -328,7 +312,6 @@ public class ChatApp : MonoBehaviour
         return button;
     }
 
-    /// <summary>Den scrollbara listan med meddelanden mellan övre och undre fältet.</summary>
     void BuildMessageList(Transform parent, float bottomOffset, float topOffset)
     {
         var scrollObject = new GameObject("Meddelanden", typeof(RectTransform), typeof(ScrollRect));
@@ -342,7 +325,7 @@ public class ChatApp : MonoBehaviour
         var viewport = new GameObject("Viewport", typeof(RectTransform), typeof(RectMask2D), typeof(Image));
         viewport.transform.SetParent(scrollObject.transform, false);
         Ui.Stretch((RectTransform)viewport.transform);
-        viewport.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.01f); // behövs för att kunna dra/scrolla
+        viewport.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.01f); // annars går det inte att scrolla med musen
 
         var contentObject = new GameObject("Innehåll", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
         contentObject.transform.SetParent(viewport.transform, false);
@@ -372,7 +355,6 @@ public class ChatApp : MonoBehaviour
         scroll.scrollSensitivity = 30f;
     }
 
-    /// <summary>En mörk ruta ovanpå chatten där man väljer varför man rapporterar.</summary>
     void BuildReportDialog()
     {
         reportDialog = Ui.Screen(canvas.transform, "Rapportera", new Color(0f, 0f, 0f, 0.6f));
@@ -381,7 +363,7 @@ public class ChatApp : MonoBehaviour
         Ui.Label(card, "Välj orsak:", 16, TextAnchor.MiddleCenter, Ui.Muted);
         foreach (string reason in ReportReasons)
         {
-            string chosen = reason; // egen kopia till lambdan
+            string chosen = reason;
             Ui.Button(card, reason, Ui.Red, () => SendReport(chosen), 17, 44f);
         }
         Ui.Button(card, "Avbryt", Color.clear, () => reportDialog.SetActive(false), 16, 38f)
@@ -397,20 +379,12 @@ public class ChatApp : MonoBehaviour
         reportDialog.SetActive(false);
     }
 
-    // ---------------------------------------------------------------- Knappar
-
-    string serverMode = "local";
-
-    /// <summary>Läser in förra valet (lokal eller online), annars lokal.</summary>
     void LoadServerChoice()
     {
         SetServerMode(PlayerPrefs.GetString(PrefServerMode, "local"), keepSavedUrl: true);
     }
 
-    /// <summary>
-    /// Väljer var servern finns. Adressfältet fylls i, men går att ändra, t.ex. till en klasskompis
-    /// dator i nätverket (ws://192.168.1.23:8080).
-    /// </summary>
+    // Fyller i adressen, men den går att ändra, t.ex. till en annan dator i nätverket
     void SetServerMode(string mode, bool keepSavedUrl = false)
     {
         serverMode = mode == "online" ? "online" : "local";
@@ -505,7 +479,7 @@ public class ChatApp : MonoBehaviour
 
     void OnChatEndEdit(string _)
     {
-        // onEndEdit körs både vid Enter och när fältet tappar fokus, så vi kollar att det var Enter
+        // onEndEdit körs även när fältet tappar fokus
         if (EnterPressed()) SendChat();
     }
 
@@ -518,8 +492,6 @@ public class ChatApp : MonoBehaviour
         chatInput.text = "";
         chatInput.ActivateInputField();
     }
-
-    // ---------------------------------------------------------------- "Skriver..."
 
     void OnChatTyping(string value)
     {
@@ -544,8 +516,6 @@ public class ChatApp : MonoBehaviour
         typingText.text = on && partner != null ? partner + " skriver..." : "";
         if (on) partnerTypingUntil = Time.unscaledTime + TypingShowSeconds;
     }
-
-    // ---------------------------------------------------------------- Nätverk
 
     void BeginConnect(Msg hello, GameObject entry)
     {
@@ -710,14 +680,12 @@ public class ChatApp : MonoBehaviour
         botBtn.gameObject.SetActive(!hasPartner);
     }
 
-    // ---------------------------------------------------------------- Meddelandelistan
-
     void ClearChat()
     {
         for (int i = content.childCount - 1; i >= 0; i--)
         {
             GameObject row = content.GetChild(i).gameObject;
-            row.SetActive(false); // så att layouten slutar räkna den direkt
+            row.SetActive(false); // Destroy sker först i slutet av framen
             Destroy(row);
         }
         lastBubbleSender = null;
@@ -725,14 +693,10 @@ public class ChatApp : MonoBehaviour
         picker = null;
     }
 
-    /// <summary>
-    /// En pratbubbla: mina till höger i blått, partnerns till vänster i grått, med tid bredvid.
-    /// Klicka på en bubbla för att reagera på den.
-    /// </summary>
     void AddChat(string sender, string text, int id)
     {
         bool mine = sender == myName;
-        if (lastBubbleSender != sender) AddGap(8f); // lite luft när en ny person börjar skriva
+        if (lastBubbleSender != sender) AddGap(8f);
         lastBubbleSender = sender;
 
         Transform row = NewRow(mine ? TextAnchor.LowerRight : TextAnchor.LowerLeft);
@@ -745,7 +709,7 @@ public class ChatApp : MonoBehaviour
         {
             var layout = bubble.GetComponent<LayoutElement>();
             bubbles[id] = new BubbleInfo { row = row.gameObject, layout = layout, baseWidth = layout.preferredWidth };
-            bubble.GetComponent<Image>().raycastTarget = true; // så att bubblan går att klicka på
+            bubble.GetComponent<Image>().raycastTarget = true;
             var button = bubble.AddComponent<Button>();
             button.transition = Selectable.Transition.None;
             button.onClick.AddListener(() => TogglePicker(id, mine));
@@ -753,9 +717,7 @@ public class ChatApp : MonoBehaviour
         Trim();
     }
 
-    // ---------------------------------------------------------------- Reaktioner
-
-    /// <summary>Visar (eller döljer) en liten rad med ♥ ★ ☺ precis under bubblan.</summary>
+    // Raden med ♥ ★ ☺ som visas under en bubbla man klickat på
     void TogglePicker(int id, bool mine)
     {
         if (!bubbles.TryGetValue(id, out BubbleInfo info) || info.row == null) return;
@@ -767,7 +729,7 @@ public class ChatApp : MonoBehaviour
         row.GetComponent<HorizontalLayoutGroup>().spacing = 4f;
         foreach (string emoji in Reactions)
         {
-            string chosen = emoji; // egen kopia till lambdan
+            string chosen = emoji;
             Button b = Ui.Button(row, emoji, Ui.Panel, () =>
             {
                 net.Send(new Msg { type = "react", id = id, text = chosen });
@@ -787,7 +749,6 @@ public class ChatApp : MonoBehaviour
         picker = null;
     }
 
-    /// <summary>Uppdaterar en reaktion och visar dem längst ner i bubblan, t.ex. "♥ 2  ★".</summary>
     void SetReaction(int id, string sender, string emoji)
     {
         if (!bubbles.TryGetValue(id, out BubbleInfo info) || info.row == null) return;
@@ -809,13 +770,12 @@ public class ChatApp : MonoBehaviour
         info.reactionsText.text = label;
         info.reactionsText.gameObject.SetActive(label.Length > 0);
 
-        // Gör bubblan bredare om reaktionerna inte får plats
+        // Bubblan blir bredare om reaktionerna inte får plats
         float needed = info.reactionsText.preferredWidth + 30f;
         info.layout.preferredWidth = Mathf.Min(MaxBubbleWidth, Mathf.Max(info.baseWidth, label.Length > 0 ? needed : 0f));
         scrollFrames = Mathf.Max(scrollFrames, 1);
     }
 
-    /// <summary>En liten grå rad i mitten, t.ex. "Söker..." eller "Ansluten till X."</summary>
     void AddSystem(string text)
     {
         lastBubbleSender = null;
@@ -831,7 +791,6 @@ public class ChatApp : MonoBehaviour
         AddNotice("Fråga från " + (sender == myName ? "dig" : sender), question);
     }
 
-    /// <summary>En ruta i mitten med en liten rubrik, för isbrytare och meddelanden från admin.</summary>
     void AddNotice(string title, string body)
     {
         lastBubbleSender = null;
@@ -844,7 +803,6 @@ public class ChatApp : MonoBehaviour
         Trim();
     }
 
-    /// <summary>En rad i listan där barnen ligger bredvid varandra.</summary>
     Transform NewRow(TextAnchor alignment)
     {
         var go = new GameObject("Rad", typeof(RectTransform), typeof(HorizontalLayoutGroup));
@@ -859,10 +817,7 @@ public class ChatApp : MonoBehaviour
         return go.transform;
     }
 
-    /// <summary>
-    /// En rundad ruta runt en eller flera texter. Bredden följer texten, men aldrig bredare än maxWidth
-    /// (då radbryts texten i stället). Texterna skapas utan förälder och flyttas in här.
-    /// </summary>
+    // Rundad ruta runt texterna. Lika bred som texten, men högst maxWidth (sen radbryts den).
     static GameObject Box(Transform row, Color color, float radius, float maxWidth, params Text[] texts)
     {
         var go = new GameObject("Bubbla", typeof(RectTransform), typeof(Image), typeof(VerticalLayoutGroup), typeof(LayoutElement));
@@ -895,10 +850,9 @@ public class ChatApp : MonoBehaviour
         Ui.Spacer(content, height);
     }
 
+    // Tar bort de äldsta raderna när listan blir för lång
     void Trim()
     {
-        // Ta bort den äldsta raden när listan blir för lång. Destroy sker först i slutet av framen,
-        // så raden stängs av direkt för att inte räknas (eller tas bort) två gånger.
         int active = 0;
         for (int i = 0; i < content.childCount; i++)
             if (content.GetChild(i).gameObject.activeSelf) active++;

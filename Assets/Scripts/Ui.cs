@@ -2,14 +2,10 @@ using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
 
-/// <summary>
-/// Färger och små hjälpfunktioner som bygger gränssnittet i kod.
-/// Allt ritas med Unitys inbyggda UI (uGUI), så inga prefabs eller bildfiler behövs.
-/// </summary>
+// Färger och hjälpfunktioner för att bygga gränssnittet i kod.
 public static class Ui
 {
-    // ---------------------------------------------------------------- Färger (samma som webbversionen)
-
+    // Samma färger som på webben
     public static readonly Color Bg = Hex(0x18191C);
     public static readonly Color Panel = Hex(0x222327);
     public static readonly Color Bubble = Hex(0x303136);
@@ -20,31 +16,26 @@ public static class Ui
     public static readonly Color Muted = Hex(0x8E8F94);
     public static readonly Color Warning = Hex(0xFFB38A);
 
-    // Knappfärger med betydelse: rött = rapportera, grönt = skapa, osv. Dämpade så att de inte skriker.
     public static readonly Color Red = Hex(0xC9483E);
     public static readonly Color Green = Hex(0x3F9E6A);
     public static readonly Color Amber = Hex(0xC98A2B);
     public static readonly Color Purple = Hex(0x7A5BC9);
 
-    // Den varma startskärmen
+    // Startskärmen
+    public static readonly Color Warm = Hex(0x5C3328);
     public static readonly Color Coral = Hex(0xE0704A);
-    public static readonly Color WarmTop = Hex(0x2D1B2E);
-    public static readonly Color WarmBottom = Hex(0x7A3F26);
     public static readonly Color WarmCard = new Color(0.10f, 0.06f, 0.06f, 0.55f);
     public static readonly Color Glass = new Color(1f, 1f, 1f, 0.12f);
 
-    // Dämpade färger för avatarerna, samma namn får alltid samma färg (samma lista som webbversionen)
     static readonly Color[] AvatarColors =
     {
         Hex(0x5B6EE1), Hex(0x3F9E8F), Hex(0xC0703F), Hex(0x9A5BC4), Hex(0xC2577A), Hex(0x5F8F3E),
     };
 
-    public const float Radius = 10f;   // standardrundning för knappar och fält
+    public const float Radius = 10f;
 
     static Color Hex(int rgb) =>
         new Color(((rgb >> 16) & 0xFF) / 255f, ((rgb >> 8) & 0xFF) / 255f, (rgb & 0xFF) / 255f);
-
-    // ---------------------------------------------------------------- Typsnitt och rundade hörn
 
     static Font font;
     static Sprite roundSprite;
@@ -53,20 +44,17 @@ public static class Ui
     {
         get
         {
+            // Segoe UI Symbol behövs för ★
             if (font == null)
-                // Första typsnittet som finns används, de andra fyller i tecken som saknas (t.ex. ★ i Segoe UI Symbol)
                 font = Font.CreateDynamicFontFromOSFont(
                     new[] { "Segoe UI", "Segoe UI Symbol", "Arial", "Helvetica", "Liberation Sans", "DejaVu Sans" }, 16);
             return font;
         }
     }
 
-    const int RoundSize = 64;          // bildens storlek i pixlar, hörnen har radien RoundSize / 2
+    const int RoundSize = 64;
 
-    /// <summary>
-    /// En vit cirkel som "9-slice"-sprite: mitten sträcks ut och hörnen behåller sin form,
-    /// så samma bild ger rundade hörn på knappar, bubblor och rutor i alla storlekar.
-    /// </summary>
+    // En vit cirkel som 9-slice-sprite. Ger rundade hörn i alla storlekar.
     static Sprite RoundSprite
     {
         get
@@ -81,7 +69,7 @@ public static class Ui
                 for (int x = 0; x < RoundSize; x++)
                 {
                     float dist = Vector2.Distance(new Vector2(x + 0.5f, y + 0.5f), new Vector2(r, r));
-                    byte alpha = (byte)(Mathf.Clamp01(r - dist) * 255f); // mjuk kant, ingen trappstegseffekt
+                    byte alpha = (byte)(Mathf.Clamp01(r - dist) * 255f);
                     pixels[y * RoundSize + x] = new Color32(255, 255, 255, alpha);
                 }
             }
@@ -94,15 +82,12 @@ public static class Ui
         }
     }
 
-    /// <summary>Ger en bild rundade hörn med den radie som anges (i UI-enheter).</summary>
     public static void Round(Image image, float radius)
     {
         image.sprite = RoundSprite;
         image.type = Image.Type.Sliced;
         image.pixelsPerUnitMultiplier = (RoundSize / 2f) / radius;
     }
-
-    // ---------------------------------------------------------------- Layout
 
     public static void Stretch(RectTransform rt, float padX = 0f, float padY = 0f)
     {
@@ -112,7 +97,6 @@ public static class Ui
         rt.offsetMax = new Vector2(-padX, -padY);
     }
 
-    /// <summary>En helskärmsyta med bakgrundsfärg.</summary>
     public static GameObject Screen(Transform parent, string name, Color color)
     {
         var go = new GameObject(name, typeof(RectTransform), typeof(Image));
@@ -122,21 +106,6 @@ public static class Ui
         return go;
     }
 
-    /// <summary>En helskärmsyta med en lodrät färgövergång från top (överst) till bottom (nederst).</summary>
-    public static GameObject GradientScreen(Transform parent, string name, Color top, Color bottom)
-    {
-        const int steps = 128;
-        var tex = new Texture2D(1, steps, TextureFormat.RGBA32, false);
-        tex.wrapMode = TextureWrapMode.Clamp;
-        for (int y = 0; y < steps; y++) tex.SetPixel(0, y, Color.Lerp(bottom, top, y / (steps - 1f)));
-        tex.Apply();
-
-        GameObject go = Screen(parent, name, Color.white);
-        go.GetComponent<Image>().sprite = Sprite.Create(tex, new Rect(0, 0, 1, steps), new Vector2(0.5f, 0.5f));
-        return go;
-    }
-
-    /// <summary>Ett centrerat kort med rundade hörn, där barnen staplas lodrätt.</summary>
     public static Transform Card(Transform parent, float width, int padding = 30, float spacing = 10f, Color? color = null)
     {
         var go = new GameObject("Kort", typeof(RectTransform), typeof(Image), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
@@ -163,7 +132,7 @@ public static class Ui
         return go.transform;
     }
 
-    /// <summary>Ett fält högst upp eller längst ner där barnen ligger bredvid varandra.</summary>
+    // Fältet högst upp eller längst ner i chatten
     public static RectTransform Bar(Transform parent, bool top, float height)
     {
         var go = new GameObject(top ? "Övre fält" : "Undre fält", typeof(RectTransform), typeof(Image), typeof(HorizontalLayoutGroup));
@@ -189,7 +158,6 @@ public static class Ui
         return rt;
     }
 
-    /// <summary>En lodrät grupp utan bakgrund, t.ex. namn + "12 online" i övre fältet.</summary>
     public static Transform Stack(Transform parent, float spacing = 0f)
     {
         var go = new GameObject("Grupp", typeof(RectTransform), typeof(VerticalLayoutGroup));
@@ -204,7 +172,6 @@ public static class Ui
         return go.transform;
     }
 
-    /// <summary>En vågrät rad där barnen delar på bredden, t.ex. två knappar bredvid varandra.</summary>
     public static Transform Row(Transform parent, float spacing = 8f)
     {
         var go = new GameObject("Rad", typeof(RectTransform), typeof(HorizontalLayoutGroup));
@@ -218,7 +185,6 @@ public static class Ui
         return go.transform;
     }
 
-    /// <summary>Ett rutnät med lika stora celler, t.ex. för intresseknapparna.</summary>
     public static Transform Grid(Transform parent, int columns, Vector2 cellSize, float spacing)
     {
         var go = new GameObject("Rutnät", typeof(RectTransform), typeof(GridLayoutGroup));
@@ -239,7 +205,7 @@ public static class Ui
         go.GetComponent<LayoutElement>().preferredHeight = height;
     }
 
-    /// <summary>Sätter önskad bredd och/eller höjd (negativt värde = ändra inte).</summary>
+    // Negativt värde = ändra inte
     public static LayoutElement Size(Component component, float width = -1f, float height = -1f)
     {
         var layout = component.GetComponent<LayoutElement>();
@@ -248,8 +214,6 @@ public static class Ui
         if (height >= 0f) layout.preferredHeight = height;
         return layout;
     }
-
-    // ---------------------------------------------------------------- Komponenter
 
     public static Text Label(Transform parent, string value, int size, TextAnchor anchor, Color color, bool bold = false)
     {
@@ -317,7 +281,6 @@ public static class Ui
         return input;
     }
 
-    /// <summary>Ett runt "chip" som kan slås av och på, t.ex. för intressen.</summary>
     public static Button Chip(Transform parent, string label, UnityAction onClick)
     {
         Button chip = Button(parent, label, Glass, onClick, 16, 34f, 17f);
@@ -330,7 +293,6 @@ public static class Ui
         ((Image)chip.targetGraphic).color = on ? Coral : Glass;
     }
 
-    /// <summary>En rund avatar med en bokstav. Namn och färg sätts med SetAvatar.</summary>
     public static Text Avatar(Transform parent, float size)
     {
         var go = new GameObject("Avatar", typeof(RectTransform), typeof(Image), typeof(LayoutElement));
@@ -355,8 +317,9 @@ public static class Ui
             image.color = Neutral;
             return;
         }
+        // Samma uträkning som på webben, så att färgen blir likadan
         uint hash = 0;
-        foreach (char c in name) hash = hash * 31 + c; // samma uträkning som webbversionen
+        foreach (char c in name) hash = hash * 31 + c;
         letter.text = char.ToUpper(name[0]).ToString();
         image.color = AvatarColors[hash % AvatarColors.Length];
     }

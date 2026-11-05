@@ -71,7 +71,7 @@ crashlytics-build.properties
 /[Aa]ssets/[Ss]treamingAssets/aa.meta
 /[Aa]ssets/[Ss]treamingAssets/aa/*
 
-# syncUp-servern: konton och rapporter skapas när servern körs och ska inte upp på GitHub
+# syncUp: konton och rapporter
 /server/users.json
 /server/users.json.tmp
 /server/reports.log

@@ -1,54 +1,32 @@
 # syncUp
 
-Ett skolprojekt där man chattar med någon ny, anonymt eller med konto. Det finns en app gjord i Unity och en
-webbversion, och båda pratar med samma server, så Unity- och webbanvändare kan chatta med varandra.
+Skolprojekt. En chatt där man pratar med någon slumpad, anonymt eller med konto. Finns som app i Unity och som hemsida, och båda kan chatta med varandra.
 
 ## Funktioner
 
-- **Anonym chatt eller konto.** Anonyma får ett namn som `Anonym#4821`. Konton matchas bara med andra konton.
-- **Intressen.** Välj till exempel musik och spel, så matchas du helst med någon som gillar samma sak.
-- **Isbrytare.** Knappen *Fråga* ger båda en slumpad fråga att prata om.
-- **Reaktioner.** Klicka på ett meddelande och reagera med ♥ ★ ☺.
-- **"Skriver..."** visas när den andra skriver.
-- **syncBot.** En testbot att prata med när ingen annan är online.
-- **Säkerhet.** Telefonnummer, mejladresser och länkar döljs, grova ord maskeras, och det finns spamskydd.
-- **Rapportera.** Välj orsak; de senaste meddelandena sparas till admin.
-- **Adminpanel.** Statistik i realtid, QR-kod för att bjuda in, meddelande till alla, kicka och stänga av konton.
+- Chatta anonymt eller logga in
+- Välj intressen och matcha med någon som gillar samma sak
+- Fråga-knapp som ger en slumpad fråga att prata om
+- Reagera på meddelanden med ♥ ★ ☺
+- Se när den andra skriver
+- syncBot, en bot att testa med om ingen annan är online
+- Telefonnummer, mejl och fula ord döljs
+- Rapportera och adminpanel (kicka, stänga av konton, QR-kod för att bjuda in)
 
-## Kom igång (lokalt)
+## Starta
 
-Kräver [Node.js](https://nodejs.org) (version 22 eller nyare för testerna).
+Man behöver [Node.js](https://nodejs.org).
 
-1. Dubbelklicka på **`Starta syncUp.bat`**. Servern startar och chatten och adminpanelen öppnas i webbläsaren.
-2. Klasskompisar i samma nätverk skannar QR-koden i adminpanelen, eller skriver adressen som står i servern-fönstret.
-3. I Unity: tryck på **Play**. Servern startar automatiskt om den inte redan körs
-   (stängs av och på i menyn *syncUp > Starta servern vid Play*).
+- Dubbelklicka på `Starta syncUp.bat`. Chatten och adminpanelen öppnas.
+- Eller tryck Play i Unity, då startar servern av sig själv.
 
-Välj **Den här datorn** på startskärmen i appen när servern körs lokalt.
+Andra i samma nätverk kan skanna QR-koden i adminpanelen.
 
-## Köra online (Render)
+## Online
 
-Då fungerar syncUp från vilket nätverk som helst, även när din dator är avstängd.
+Servern ligger på Render: https://syncup-ptcn.onrender.com
 
-1. Skapa ett gratis konto på [render.com](https://render.com) och koppla ditt GitHub-konto.
-2. Välj **New > Blueprint** och välj det här repot. Render läser `render.yaml` och sätter upp allt.
-3. När det är klart får du en adress, till exempel `https://syncup-abcd.onrender.com`.
-   - Chatten: öppna adressen i webbläsaren.
-   - Unity: välj **Online** på startskärmen och skriv `wss://syncup-abcd.onrender.com`
-     (eller ändra `onlineServer` på ChatApp så att det blir förvalt).
-   - Adminpanelen: `https://syncup-abcd.onrender.com/admin?key=NYCKEL`. Nyckeln står under *Environment* hos Render.
-
-Att tänka på med gratisnivån: servern somnar efter 15 minuter utan besökare och tar ungefär en minut att vakna,
-och konton och rapporter försvinner när den startas om. Öppna sidan en stund innan presentationen.
-
-## Mappar
-
-| Mapp | Innehåll |
-|---|---|
-| `Assets/Scripts` | Unity-appen: `ChatApp.cs` (skärmar och logik), `Ui.cs` (utseende), `NetClient.cs` (nätverk) |
-| `Assets/Scripts/Editor` | Startar servern vid Play och ställer in bygget (fönster och ikon) |
-| `server` | Servern i Node.js, utan externa paket. Protokollet beskrivs i `server/hub.js` |
-| `server/public` | Webbversionen av chatten |
+Välj "Online" i appen. Servern somnar om ingen använt den på en stund, så öppna sidan lite innan.
 
 ## Tester
 
@@ -56,5 +34,3 @@ och konton och rapporter försvinner när den startas om. Öppna sidan en stund 
 cd server
 npm test
 ```
-
-Testerna startar en egen server och provar alla funktioner automatiskt.

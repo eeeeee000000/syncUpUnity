@@ -1,4 +1,4 @@
-/* syncUp – webbversionen. Samma färger som Unity-appen. */
+/* syncUp, samma färger som i Unity */
 
 :root {
   --bg: #18191c;
@@ -11,16 +11,14 @@
   --primary: #3d78d9;
   --warn: #ffb38a;
 
-  /* Knappfärger med betydelse, dämpade så att de inte skriker */
   --red: #c9483e;
   --green: #3f9e6a;
   --amber: #c98a2b;
   --purple: #7a5bc9;
 
-  /* Den varma startskärmen */
+  /* startskärmen */
+  --warm: #5c3328;
   --coral: #e0704a;
-  --warm-top: #2d1b2e;
-  --warm-bottom: #7a3f26;
   --warm-card: rgba(26, 15, 15, 0.55);
   --glass: rgba(255, 255, 255, 0.12);
 }
@@ -69,15 +67,14 @@ input {
 input:focus { border-color: var(--primary); }
 input::placeholder { color: var(--muted); }
 
-/* ---------------------------------------------------------------- Start / konto */
-
+/* Start / konto */
 .screen { min-height: 100%; }
 #home, #auth {
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px 16px;
-  background: linear-gradient(var(--warm-top), var(--warm-bottom));
+  background: var(--warm);
 }
 .card {
   width: 100%;
@@ -115,8 +112,7 @@ h1 { margin: 0; text-align: center; font-size: 36px; }
 .chips input:checked + span { background: var(--coral); }
 .chips input:focus-visible + span { outline: 2px solid var(--coral); outline-offset: 2px; }
 
-/* ---------------------------------------------------------------- Chatt */
-
+/* Chatt */
 #chat { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
 
 .top { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: var(--panel); }
@@ -155,7 +151,7 @@ h1 { margin: 0; text-align: center; font-size: 36px; }
 .row[data-id] .bubble { cursor: pointer; position: relative; }
 .row.reacted { margin-bottom: 12px; }
 
-/* Reaktionsmärket som hänger i bubblans nedre hörn */
+/* reaktionerna i bubblans hörn */
 .reacts {
   position: absolute;
   bottom: -13px;
@@ -170,7 +166,6 @@ h1 { margin: 0; text-align: center; font-size: 36px; }
 }
 .row.me .reacts { right: auto; left: 8px; }
 
-/* Raden man väljer reaktion i */
 .picker { display: flex; gap: 4px; margin: 2px 0 6px; }
 .picker.me { justify-content: flex-end; }
 .picker button { width: 36px; height: 36px; padding: 0; border-radius: 50%; background: var(--panel); font-size: 17px; }
@@ -195,8 +190,7 @@ h1 { margin: 0; text-align: center; font-size: 36px; }
 .composer input { flex: 1; border-radius: 999px; padding: 11px 18px; }
 .composer .send { width: 44px; height: 44px; padding: 0; border-radius: 50%; display: grid; place-items: center; }
 
-/* ---------------------------------------------------------------- Rapportruta */
-
+/* Rapportruta */
 .modal {
   position: fixed;
   inset: 0;
@@ -211,8 +205,7 @@ h1 { margin: 0; text-align: center; font-size: 36px; }
 .reasons { display: flex; flex-direction: column; gap: 6px; }
 .reasons button { padding: 11px; background: var(--red); }
 
-/* ---------------------------------------------------------------- Mobil */
-
+/* Mobil */
 @media (max-width: 640px) {
   .top { flex-wrap: wrap; }
   .who { flex-basis: calc(100% - 60px); }

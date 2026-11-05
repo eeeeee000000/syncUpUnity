@@ -1,50 +1,39 @@
 'use strict';
 
-/*
- * Navet i syncUp: håller reda på alla anslutna, matchar ihop folk och skickar meddelanden.
- *
- * Protokoll (JSON över WebSocket):
- *   klient -> server: anon | register | login | find | next | bot | chat | typing | icebreaker | react | report
- *   server -> klient: welcome | auth_ok | auth_error | searching | matched | chat | typing | reaction |
- *                     icebreaker | partner_left | info | announce | kicked | online
- *
- * Chattmeddelanden har ett id (1, 2, 3 ... per samtal) som reaktioner pekar på:
- *   { type: 'react', id: 3, text: '♥' }   sätter, byter eller (samma tecken igen) tar bort min reaktion
- *   { type: 'reaction', id: 3, sender: 'Anonym#1234', text: '♥' }   text '' = reaktionen togs bort
- */
+// Håller koll på alla som är anslutna, matchar ihop folk och skickar meddelanden.
+//
+// Meddelanden (JSON):
+//   klient -> server: anon, register, login, find, next, bot, chat, typing, icebreaker, react, report
+//   server -> klient: welcome, auth_ok, auth_error, searching, matched, chat, typing, reaction,
+//                     icebreaker, partner_left, info, announce, kicked, online
 
 const crypto = require('crypto');
 const { Accounts } = require('./accounts');
 const { INTERESTS, ICEBREAKERS, REACTIONS } = require('./content');
+const { RateLimiter } = require('./security');
 const bot = require('./bot');
 
-const MAX_TEXT = 300;                // max tecken per meddelande
-const HISTORY_LIMIT = 30;            // meddelanden som sparas i minnet per samtal (för rapporter)
-const REMATCH_AVOID_MS = 8000;       // matcha inte direkt med samma person igen
-const FLOOD_WINDOW_MS = 5000;        // flodskydd: max FLOOD_MAX meddelanden per fönster
+const MAX_TEXT = 300;
+const HISTORY_LIMIT = 30;          // sparas för rapporter
+const REMATCH_AVOID_MS = 8000;     // matcha inte direkt med samma person igen
+const FLOOD_WINDOW_MS = 5000;
 const FLOOD_MAX = 12;
-const TYPING_MIN_GAP_MS = 400;       // "skriver..." skickas inte oftare än så här
+const TYPING_MIN_GAP_MS = 400;
 const ICEBREAKER_COOLDOWN_MS = 4000;
 const REPORT_COOLDOWN_MS = 10000;
 const MAX_INTERESTS = 5;
-const MAX_FAILED_LOGINS = 5;
+const MAX_FAILED_LOGINS = 5;       // per anslutning
+const IP_FAILED_LOGINS = 10;       // per IP och kvart
+const IP_REGISTRATIONS = 5;        // per IP och timme
 
-/**
- * @param {object} opts
- * @param {Accounts} opts.accounts
- * @param {(text: string) => string} opts.filterText
- * @param {import('./reports').Reports} opts.reports
- * @param {number} [opts.interestWaitMs] hur länge man väntar på någon med samma intressen innan vem som helst duger
- * @param {number} [opts.botSpeed] faktor för hur länge syncBot "skriver" (lägre = snabbare, används i testerna)
- */
 function createHub({ accounts, filterText, reports, interestWaitMs = 5000, botSpeed = 1, log = console.log }) {
-  const clients = new Set();          // alla som valt anonym eller loggat in
-  const onlineAccounts = new Set();   // gemener-namn på inloggade konton
+  const clients = new Set();
+  const onlineAccounts = new Set();
   const queues = { anon: [], account: [] };
   const rooms = new Set();
   const stats = { startedAt: Date.now(), matches: 0, messages: 0, reports: 0 };
-
-  // ---------------------------------------------------------------- Hjälpare
+  const failedLoginsByIp = new RateLimiter(IP_FAILED_LOGINS, 15 * 60 * 1000);
+  const registrationsByIp = new RateLimiter(IP_REGISTRATIONS, 60 * 60 * 1000);
 
   const send = (ws, obj) => {
     if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj));
@@ -58,11 +47,11 @@ function createHub({ accounts, filterText, reports, interestWaitMs = 5000, botSp
   function newState() {
     return {
       name: null,
-      mode: null,          // 'anon' | 'account'
+      mode: null, // 'anon' eller 'account'
       interests: [],
       partner: null,
       room: null,
-      lastRoom: null,      // behålls efter att samtalet slutat så att man kan rapportera i efterhand
+      lastRoom: null, // så att man kan rapportera efter att samtalet slutat
       lastPartner: null,
       avoidUntil: 0,
       queued: false,
@@ -91,22 +80,18 @@ function createHub({ accounts, filterText, reports, interestWaitMs = 5000, botSp
     return null;
   }
 
-  /** Plockar ut giltiga intressen ur det klienten skickade. */
   function parseInterests(list) {
     if (!Array.isArray(list)) return [];
     const valid = list.filter((i) => INTERESTS.includes(i));
     return [...new Set(valid)].slice(0, MAX_INTERESTS);
   }
 
-  // ---------------------------------------------------------------- Matchning
+  // Matchning
 
   const avoids = (a, b, now) => a.s.lastPartner === b && now < a.s.avoidUntil;
   const shared = (a, b) => a.s.interests.filter((i) => b.s.interests.includes(i));
 
-  /**
-   * Två personer kan matchas om ingen av dem precis lämnat den andra, och om de har ett gemensamt
-   * intresse. Den som saknar intressen, eller har väntat länge, matchas med vem som helst.
-   */
+  // Har båda valt intressen måste de ha något gemensamt, tills någon av dem väntat för länge
   function canPair(a, b, now) {
     if (avoids(a, b, now) || avoids(b, a, now)) return false;
     if (!a.s.interests.length || !b.s.interests.length) return true;
@@ -133,7 +118,7 @@ function createHub({ accounts, filterText, reports, interestWaitMs = 5000, botSp
     tryMatch(s.mode);
   }
 
-  /** Matchar den som väntat längst med den i kön som har flest gemensamma intressen. */
+  // Den som väntat längst får den i kön som har flest gemensamma intressen
   function tryMatch(mode) {
     const q = queues[mode];
     const now = Date.now();
@@ -171,7 +156,7 @@ function createHub({ accounts, filterText, reports, interestWaitMs = 5000, botSp
       lastIcebreakerAt: 0,
       lastQuestion: null,
       nextMessageId: 1,
-      reactions: new Map(),   // meddelande-id -> Map(namn -> tecken)
+      reactions: new Map(), // meddelande-id -> Map(namn -> tecken)
     };
     rooms.add(room);
     stats.matches++;
@@ -204,7 +189,6 @@ function createHub({ accounts, filterText, reports, interestWaitMs = 5000, botSp
     }
   }
 
-  /** Skickar ett chattmeddelande till båda i rummet och sparar det i historiken. */
   function deliverChat(room, from, text) {
     const id = room.nextMessageId++;
     room.history.push({ t: Date.now(), from: from.s.name, text });
@@ -214,7 +198,7 @@ function createHub({ accounts, filterText, reports, interestWaitMs = 5000, botSp
     for (const member of room.members) send(member, out);
   }
 
-  /** Sätter, byter eller tar bort (samma tecken igen) min reaktion på ett meddelande i samtalet. */
+  // Samma tecken en gång till tar bort reaktionen
   function handleReact(ws, m) {
     const room = ws.s.room;
     const id = Number(m.id);
@@ -232,9 +216,8 @@ function createHub({ accounts, filterText, reports, interestWaitMs = 5000, botSp
     for (const member of room.members) send(member, out);
   }
 
-  // ---------------------------------------------------------------- syncBot
+  // syncBot är en låtsas-anslutning som får samma meddelanden som en vanlig klient
 
-  /** Skapar en låtsas-anslutning som beter sig som en klient, men som svarar automatiskt. */
   function createBot(mode) {
     const botWs = { isBot: true, readyState: 1, s: newState(), lastAnswer: null, timers: new Set() };
     botWs.s.name = bot.BOT_NAME;
@@ -277,7 +260,7 @@ function createHub({ accounts, filterText, reports, interestWaitMs = 5000, botSp
     startRoom(ws, createBot(ws.s.mode));
   }
 
-  // ---------------------------------------------------------------- Inloggning
+  // Inloggning
 
   const authError = (ws, error) => send(ws, { type: 'auth_error', error });
 
@@ -300,16 +283,25 @@ function createHub({ accounts, filterText, reports, interestWaitMs = 5000, botSp
     const nameError = Accounts.validateName(name);
     if (nameError) return authError(ws, nameError);
 
+    const ip = ws.s.ip;
     if (m.type === 'register') {
       if (password.length < 6 || password.length > 64) {
         return authError(ws, 'Lösenordet måste vara 6–64 tecken.');
       }
+      if (registrationsByIp.blocked(ip)) {
+        return authError(ws, 'För många nya konton härifrån. Försök igen om en stund.');
+      }
       const err = accounts.register(name, password);
       if (err) return authError(ws, err);
+      registrationsByIp.hit(ip);
     } else {
+      if (failedLoginsByIp.blocked(ip)) {
+        return authError(ws, 'För många felaktiga inloggningar. Vänta en kvart och försök igen.');
+      }
       const user = accounts.check(name, password);
       if (!user) {
         ws.s.failedLogins++;
+        failedLoginsByIp.hit(ip);
         authError(ws, 'Fel användarnamn eller lösenord.');
         if (ws.s.failedLogins >= MAX_FAILED_LOGINS) ws.close();
         return;
@@ -324,9 +316,8 @@ function createHub({ accounts, filterText, reports, interestWaitMs = 5000, botSp
     join(ws, name, 'account');
   }
 
-  // ---------------------------------------------------------------- Meddelanden
+  // Meddelanden
 
-  /** Enkelt flodskydd. Returnerar true om meddelandet ska släppas igenom. */
   function allowMessage(ws, now) {
     const s = ws.s;
     s.msgTimes = s.msgTimes.filter((t) => now - t < FLOOD_WINDOW_MS);
@@ -417,7 +408,7 @@ function createHub({ accounts, filterText, reports, interestWaitMs = 5000, botSp
     const s = ws.s;
     const now = Date.now();
 
-    // "skriver..." har en egen spärr och räknas inte i flodskyddet
+    // typing har en egen spärr och räknas inte i flodskyddet
     if (m.type === 'typing') return s.name ? handleTyping(ws, m, now) : undefined;
     if (!allowMessage(ws, now)) return;
     if (!s.name) return handleAuth(ws, m);
@@ -456,19 +447,20 @@ function createHub({ accounts, filterText, reports, interestWaitMs = 5000, botSp
     broadcastOnline();
   }
 
-  function attach(ws) {
+  function attach(ws, ip = 'okänd') {
     ws.s = newState();
+    ws.s.ip = ip;
     ws.on('message', (data) => onMessage(ws, data));
     ws.on('close', () => onClose(ws));
   }
 
-  /** Körs regelbundet, så att de som väntat färdigt på "rätt" intressen eller samma person matchas. */
+  // Körs varje sekund så att de som väntat klart på intressen eller samma person blir matchade
   function tick() {
     tryMatch('anon');
     tryMatch('account');
   }
 
-  // ---------------------------------------------------------------- Admin
+  // Admin
 
   function statusOf(ws) {
     if (ws.s.room) return 'chattar';
@@ -476,7 +468,7 @@ function createHub({ accounts, filterText, reports, interestWaitMs = 5000, botSp
     return 'ledig';
   }
 
-  /** En ögonblicksbild för adminpanelen. Innehåller aldrig chattmeddelanden. */
+  // Skickar aldrig med vad folk skriver
   function snapshot() {
     const now = Date.now();
     const list = [...clients];
@@ -506,7 +498,6 @@ function createHub({ accounts, filterText, reports, interestWaitMs = 5000, botSp
     };
   }
 
-  /** Kopplar bort en ansluten användare. Returnerar false om ingen med det namnet är online. */
   function kick(name, reason = 'Du har kopplats bort av admin.') {
     const ws = findClient(name);
     if (!ws) return false;

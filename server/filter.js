@@ -1,6 +1,6 @@
 'use strict';
 
-// Filter för chattmeddelanden: döljer kontaktuppgifter och maskerar grova ord från badwords.txt.
+// Döljer kontaktuppgifter och grova ord (från badwords.txt).
 
 const fs = require('fs');
 
@@ -24,10 +24,9 @@ function createFilter(badWordsFile) {
     ? new RegExp('(?<![\\p{L}\\p{N}])(' + badWords.map(escapeRe).join('|') + ')(?![\\p{L}\\p{N}])', 'giu')
     : null;
 
-  /** Tar bort kontrolltecken, döljer kontaktuppgifter och maskerar grova ord. */
   function filterText(text) {
     let t = text.replace(/[\u0000-\u001f\u007f]/g, ' ');
-    // Byggs från en sträng: U+2028/U+2029 är radbrytningar och får inte stå direkt i ett regex-uttryck
+    // måste vara en sträng, U+2028 räknas som radbrytning i ett vanligt regex
     t = t.replace(new RegExp('[\u200b-\u200f\u2028\u2029\ufeff]', 'g'), ''); // osynliga tecken
     t = t.replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, '[dolt]');                   // e-post
     t = t.replace(/(https?:\/\/|www\.)\S+/gi, '[dolt]');                    // länkar
