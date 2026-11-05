@@ -144,7 +144,9 @@
 
 // Tar bort nyckeln från adressfältet så att den inte syns på projektorn
 const KEY = (() => {
-  const fromUrl = new URLSearchParams(location.search).get('key');
+  // inte URLSearchParams, den gör om + till mellanslag och nycklar från Render kan innehålla +
+  const match = location.search.match(/[?&]key=([^&]*)/);
+  const fromUrl = match ? decodeURIComponent(match[1]) : '';
   let key = fromUrl || '';
   try {
     if (fromUrl) sessionStorage.setItem('syncUpAdminKey', fromUrl);

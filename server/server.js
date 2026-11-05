@@ -136,7 +136,7 @@ server.listen(PORT, () => {
     const base = PUBLIC_URL || '(din Render-adress)';
     console.log(`Chatt:      ${base}`);
     console.log(`Unity:      ${base.replace(/^http/, 'ws')}`);
-    console.log(`Adminpanel: ${base}/admin?key=${ADMIN_KEY}`);
+    console.log(`Adminpanel: ${base}/admin?key=${encodeURIComponent(ADMIN_KEY)}`);
     return;
   }
   console.log('Anslut från den här datorn:');
@@ -148,7 +148,7 @@ server.listen(PORT, () => {
     for (const ip of lan) console.log(`  Webb:  http://${ip}:${PORT}    Unity: ws://${ip}:${PORT}`);
   }
   console.log('');
-  const adminUrl = `http://localhost:${PORT}/admin?key=${ADMIN_KEY}`;
+  const adminUrl = `http://localhost:${PORT}/admin?key=${encodeURIComponent(ADMIN_KEY)}`;
   console.log(`Adminpanel (bara på den här datorn): ${adminUrl}`);
   if (process.env.OPEN_BROWSER === '1') {
     openInBrowser(`http://localhost:${PORT}`);
