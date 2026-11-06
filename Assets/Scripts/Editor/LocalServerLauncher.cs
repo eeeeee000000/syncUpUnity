@@ -6,7 +6,8 @@ using System.Net.Sockets;
 using UnityEditor;
 using Debug = UnityEngine.Debug;
 
-// Startar servern när man trycker Play och stänger den när man slutar.
+// Kör "Starta syncUp.bat" när man trycker Play, samma fönster och webbläsarflikar
+// som när man dubbelklickar på den. Stängs när man slutar köra.
 // Gör inget om en server redan körs. Kan stängas av i menyn syncUp.
 [InitializeOnLoad]
 static class LocalServerLauncher
@@ -18,6 +19,7 @@ static class LocalServerLauncher
     const string PidKey = "syncUp.serverPid";
     const string LogOffsetKey = "syncUp.serverLogOffset";
     const double LogPollSeconds = 0.5;
+    const string StartScript = "Starta syncUp.bat";
 
     static double nextLogPoll;
 
@@ -28,8 +30,7 @@ static class LocalServerLauncher
         EditorApplication.update += PollLog;
     }
 
-    static string LogPath =>
-        Path.Combine(Directory.GetParent(UnityEngine.Application.dataPath).FullName, "Temp", "syncUp-server.log");
+    static string LogPath => Path.Combine(ProjectFolder, "Temp", "syncUp-server.log");
 
     // Visar nya rader från serverns logg i Console
     static void PollLog()
@@ -104,22 +105,22 @@ static class LocalServerLauncher
             return;
         }
 
-        string dir = FindServerFolder();
-        if (dir == null)
+        string bat = Path.Combine(ProjectFolder, StartScript);
+        if (!File.Exists(bat))
         {
-            Debug.LogWarning("syncUp: hittade inte server/server.js. Starta servern själv.");
+            Debug.LogWarning($"syncUp: hittade inte {StartScript}. Starta servern själv.");
             return;
         }
 
-        string adminKey = Guid.NewGuid().ToString("N").Substring(0, 12);
-        var info = new ProcessStartInfo("node", "server.js")
+        // Inget CreateNoWindow, så cmd får ett eget fönster precis som vid dubbelklick
+        var info = new ProcessStartInfo("cmd.exe", $"/c \"\"{bat}\"\"")
         {
-            WorkingDirectory = dir,
+            WorkingDirectory = ProjectFolder,
             UseShellExecute = false,
-            CreateNoWindow = true,
+            CreateNoWindow = false,
         };
-        info.EnvironmentVariables["ADMIN_KEY"] = adminKey;
         info.EnvironmentVariables["PORT"] = Port.ToString();
+        // Loggen kopieras även till Unitys Console
         info.EnvironmentVariables["LOG_FILE"] = LogPath;
         SessionState.SetInt(LogOffsetKey, 0);
 
@@ -127,12 +128,11 @@ static class LocalServerLauncher
         {
             Process process = Process.Start(info);
             SessionState.SetInt(PidKey, process.Id);
-            Debug.Log($"syncUp: servern startad. Webb: http://localhost:{Port}   " +
-                      $"Admin: http://localhost:{Port}/admin?key={adminKey}");
+            Debug.Log("syncUp: servern startad i ett eget fönster. Adminlänken står där och i Console.");
         }
-        catch (Win32Exception)
+        catch (Win32Exception e)
         {
-            Debug.LogWarning("syncUp: kunde inte starta servern. Är Node.js installerat? https://nodejs.org");
+            Debug.LogWarning("syncUp: kunde inte starta servern: " + e.Message);
         }
     }
 
@@ -145,10 +145,16 @@ static class LocalServerLauncher
         try
         {
             Process process = Process.GetProcessById(pid);
-            // Kolla att det är node, id:t kan ha återanvänts av ett annat program
-            if (!process.HasExited && process.ProcessName.Equals("node", StringComparison.OrdinalIgnoreCase))
+            // Kolla att det är vårt cmd-fönster, id:t kan ha återanvänts av ett annat program
+            if (!process.HasExited && process.ProcessName.Equals("cmd", StringComparison.OrdinalIgnoreCase))
             {
-                process.Kill();
+                // /T stänger även node som körs inuti fönstret
+                var kill = Process.Start(new ProcessStartInfo("taskkill", $"/PID {pid} /T /F")
+                {
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                });
+                kill.WaitForExit(3000);
                 Debug.Log("syncUp: servern stängd.");
             }
         }
@@ -162,15 +168,7 @@ static class LocalServerLauncher
         }
     }
 
-    static string FindServerFolder()
-    {
-        string project = Directory.GetParent(UnityEngine.Application.dataPath).FullName;
-        foreach (string candidate in new[] { Path.Combine(project, "server"), Path.Combine(project, "..", "server") })
-        {
-            if (File.Exists(Path.Combine(candidate, "server.js"))) return Path.GetFullPath(candidate);
-        }
-        return null;
-    }
+    static string ProjectFolder => Directory.GetParent(UnityEngine.Application.dataPath).FullName;
 
     static bool PortInUse()
     {
