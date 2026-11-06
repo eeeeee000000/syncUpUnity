@@ -30,6 +30,8 @@ Film: [docs/syncUp.mp4](docs/syncUp.mp4)
 - **Konton:** sparas i en JSON-fil, lösenord hashade med scrypt.
 - **Drift:** Render, uppdateras automatiskt från GitHub.
 
+Mer om hur allt fungerar: [docs/TEKNIK.md](docs/TEKNIK.md)
+
 ## Filer
 
 | Mapp | Innehåll |
@@ -37,7 +39,7 @@ Film: [docs/syncUp.mp4](docs/syncUp.mp4)
 | `server/` | Servern, adminpanelen och tester |
 | `server/public/` | Webbversionen |
 | `Assets/` | Unity-projektet |
-| `docs/` | Bild och film |
+| `docs/` | Bild, film och teknisk beskrivning |
 
 ## Köra lokalt
 
