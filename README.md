@@ -1,36 +1,19 @@
 # syncUp
 
-Skolprojekt. En chatt där man pratar med någon slumpad, anonymt eller med konto. Finns som app i Unity och som hemsida, och båda kan chatta med varandra.
+Skolprojekt. En chatt där man pratar med någon slumpad, anonymt eller med konto. Finns i Unity och som hemsida, och båda kan chatta med varandra.
 
 ## Funktioner
 
-- Chatta anonymt eller logga in
-- Välj intressen och matcha med någon som gillar samma sak
-- Fråga-knapp som ger en slumpad fråga att prata om
-- Reagera på meddelanden med ♥ ★ ☺
-- Se när den andra skriver
-- syncBot, en bot att testa med om ingen annan är online
-- Telefonnummer, mejl och fula ord döljs
-- Rapportera och adminpanel (kicka, stänga av konton, QR-kod för att bjuda in)
+- Matchning på intressen
+- Slumpade frågor att prata om, reaktioner och "skriver..."
+- syncBot att testa med när ingen annan är online
+- Filter för telefonnummer, mejl och fula ord
+- Rapportering och adminpanel med QR-kod
 
 ## Starta
 
-Man behöver [Node.js](https://nodejs.org).
+Kräver [Node.js](https://nodejs.org). Dubbelklicka på `Starta syncUp.bat` eller tryck Play i Unity.
 
-- Dubbelklicka på `Starta syncUp.bat`. Chatten och adminpanelen öppnas.
-- Eller tryck Play i Unity, då startar servern av sig själv.
+Online: https://syncup-ptcn.onrender.com (kan ta en stund att vakna).
 
-Andra i samma nätverk kan skanna QR-koden i adminpanelen.
-
-## Online
-
-Servern ligger på Render: https://syncup-ptcn.onrender.com
-
-Välj "Online" i appen. Servern somnar om ingen använt den på en stund, så öppna sidan lite innan.
-
-## Tester
-
-```
-cd server
-npm test
-```
+Tester: `cd server` och `npm test`.
